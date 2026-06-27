@@ -64,22 +64,36 @@ def fetch_raw_startup_data(limit: int = 100):
         # Grab the matching offering data, or an empty dict if none exists
         matching_offering = offering_lookup.get(accession_num, {})
         
-        # Grab the matching AI profile data, or an empty dict if none exists
-        # matching_ai_profile = next((row for row in ai_profile_data if row.get("CIK") == issuer.get("CIK")), {})
+        # --- DATA CLEANING & TYPE CASTING ---
+        raw_amount_str = matching_offering.get("TOTALOFFERINGAMOUNT")
+        
+        try:
+            if not raw_amount_str or str(raw_amount_str).strip().lower() in ["", "none", "null"]:
+                clean_amount = 0.0
+            else:
+                # Strip commas and cast to a strict Python float
+                clean_string = str(raw_amount_str).replace(",", "").strip()
+                clean_amount = float(clean_string)
+        except ValueError:
+            clean_amount = 0.0 
+            
+        # Overwrite the dirty string with our clean float
+        matching_offering["TOTALOFFERINGAMOUNT"] = clean_amount
+        # ------------------------------------
         
         # Combine the two dictionaries using the ** unpacking operator
-        # combined_row = {**issuer, **matching_offering, **matching_ai_profile}
         combined_row = {**issuer, **matching_offering}
         merged_data.append(combined_row)
     
     return merged_data
 
-# Test the extraction
-raw_data = fetch_raw_startup_data(limit=5)
+if __name__ == "__main__":
+    # Test the extraction
+    raw_data = fetch_raw_startup_data(limit=5)
 
-if raw_data:
-    print(f"\nSuccessfully pulled {len(raw_data)} fully merged records.")
-    for i in range(min(5, len(raw_data))):
-        print(raw_data[i])
-else:
-    print("No data found.")
+    if raw_data:
+        print(f"\nSuccessfully pulled {len(raw_data)} fully merged records.")
+        for i in range(min(5, len(raw_data))):
+            print(raw_data[i])
+    else:
+        print("No data found.")
