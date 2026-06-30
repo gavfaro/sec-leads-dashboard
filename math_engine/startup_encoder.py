@@ -4,7 +4,7 @@ from sklearn.preprocessing import MinMaxScaler, OneHotEncoder
 
 """
 We want to represent each startup as a matrix, eventually we will have the investors as a matrix as well. With this we can find the distance between startups and investors to identify potential matches.
-S = [S_fin || S_cat || S_sem]^T, where S_fin is the financial features, S_cat is the categorical features, and S_sem is the semantic features.
+S_i = [S_fin || S_cat || S_sem]^T, where S_fin is the financial features, S_cat is the categorical features, S_sem is the semantic features, and S_i is the feature vector for the i-th startup. S = [S_1, S_2, ..., S_n]
 """
 
 
