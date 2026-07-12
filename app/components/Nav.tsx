@@ -6,6 +6,7 @@ import { usePathname } from "next/navigation";
 const TABS = [
   { href: "/", label: "SEC Leads" },
   { href: "/investors", label: "Investors" },
+  { href: "/find-investors", label: "Find Investors" },
 ];
 
 export default function Nav() {
