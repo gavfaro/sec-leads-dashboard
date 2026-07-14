@@ -31,7 +31,9 @@ export default async function FindInvestorsPage() {
         .from("match_results")
         .select(
           "match_run_id, rank, score, score_breakdown, contact_id, " +
-            "contacts(first_name, last_name, role, linkedin_url, org_id, organizations(name))",
+            "contacts(first_name, last_name, role, linkedin_url, bio, org_id, " +
+            "organizations(name), " +
+            "contact_investments(relationship, companies(id, name, description)))",
         )
         .order("rank"),
     ]);
@@ -85,11 +87,12 @@ export default async function FindInvestorsPage() {
     if (!resultsByRun.has(r.match_run_id)) resultsByRun.set(r.match_run_id, []);
     resultsByRun.get(r.match_run_id)!.push({
       contactId: r.contact_id,
-      contactName: contact
-        ? `${contact.first_name} ${contact.last_name}`
-        : "Unknown",
+      firstName: contact?.first_name ?? "Unknown",
+      lastName: contact?.last_name ?? "",
       role: contact?.role ?? null,
       linkedinUrl: contact?.linkedin_url ?? null,
+      bio: contact?.bio ?? null,
+      investments: contact?.contact_investments ?? [],
       orgId: contact?.org_id ?? "",
       orgName: org?.name ?? "Unknown",
       rank: r.rank,

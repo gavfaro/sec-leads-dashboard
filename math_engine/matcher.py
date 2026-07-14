@@ -3,7 +3,7 @@ import math
 from dataclasses import asdict
 
 from data_puller import fetch_investor_data, get_supabase
-from investor_encoder import ContactFeatureEncoder, stage_closeness
+from investor_encoder import ContactFeatureEncoder, distribution_stage_fit
 from startup_encoder import StartupInput
 
 # Weighted-sum fusion, not a learned attention mechanism (see plan doc) -- there's no
@@ -39,7 +39,7 @@ def score_startup_against_investors(startup: StartupInput, contacts: list[dict])
 
     for i, contact in enumerate(contacts):
         vertical_score = _vertical_overlap(startup.verticals, encoder.vertical_weights(contact))
-        stage_score = stage_closeness(encoder.dominant_stage(contact), startup.normalized_stage)
+        stage_score = distribution_stage_fit(encoder.stage_distribution(contact), startup.normalized_stage)
         check_size_score = _check_size_fit(encoder.typical_check_size(contact), startup.target_raise)
         text_score = encoder.text_similarity(i, startup.description)
 

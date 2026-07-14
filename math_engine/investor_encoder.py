@@ -78,6 +78,48 @@ def stage_closeness(stage_a: str | None, stage_b: str | None) -> float:
     return max(0.0, 1.0 - 0.34 * distance)
 
 
+# Keyword fallback for vertical inference from free text (bios + portfolio company
+# descriptions). Used only when neither contact_verticals nor the firm's
+# vertical_focus have any tags -- true for every contact today, since no scraper has
+# populated structured sector tags yet. Structured tags always take priority over
+# this once they exist; this just keeps "vertical" from defaulting to neutral for
+# everyone in the meantime. Keys must match verticals.vertical_name exactly.
+_VERTICAL_KEYWORDS: dict[str, list[str]] = {
+    "AI": ["ai", "artificial intelligence", "machine learning", "ml", "generative ai",
+           "genai", "neural network", "large language model", "llm"],
+    "Ad Tech": ["advertising", "ad tech", "adtech", "ad platform", "programmatic advertising"],
+    "Commercial Real Estate (CRE)": ["real estate", "cre", "commercial property", "property management"],
+    "Consumer": ["consumer app", "direct-to-consumer", "d2c", "social network", "mobile app"],
+    "Consumer Products": ["consumer product", "cpg", "packaged goods", "retail brand"],
+    "Cybersecurity": ["security", "cyber", "vulnerability", "threat detection",
+                       "encryption", "malware", "data breach"],
+    "Fintech & Crypto": ["fintech", "financial technology", "payments", "banking",
+                          "crypto", "blockchain", "web3", "defi", "stablecoin", "cryptocurrency"],
+    "Infrastructure": ["infrastructure", "cloud", "devops", "developer tools",
+                        "api platform", "data pipeline", "kubernetes"],
+    "Marketplace & Commerce": ["marketplace", "e-commerce", "ecommerce", "commerce platform",
+                                "online retail", "supply chain"],
+    "SaaS": ["saas", "software as a service", "b2b software", "enterprise software"],
+    "Sport Tech": ["sports", "athlete", "fitness", "sport tech"],
+}
+
+_VERTICAL_PATTERNS: dict[str, re.Pattern] = {
+    vertical: re.compile(r"\b(?:" + "|".join(re.escape(kw) for kw in keywords) + r")\b", re.IGNORECASE)
+    for vertical, keywords in _VERTICAL_KEYWORDS.items()
+}
+
+
+def distribution_stage_fit(distribution: dict[str, float], target_stage: str | None) -> float:
+    """Expected stage-closeness across a contact's *whole* stage distribution,
+    rather than collapsing it to a single dominant stage first. A contact split
+    60/40 between Series A and Growth should score partial credit reflecting both,
+    not get treated as a pure Series A investor because that's the plurality.
+    Neutral 0.5 if we have no distribution or no target stage to compare against."""
+    if not distribution or target_stage is None:
+        return 0.5
+    return sum(weight * stage_closeness(stage, target_stage) for stage, weight in distribution.items())
+
+
 class ContactFeatureEncoder:
     def __init__(self, contacts: list[dict]):
         self.contacts = contacts
@@ -106,11 +148,23 @@ class ContactFeatureEncoder:
         return " ".join(p for p in parts if p)
 
     @staticmethod
+    def _text_vertical_weights(text: str) -> dict[str, float]:
+        """Infers a soft vertical distribution from keyword hits in free text --
+        last-resort fallback, see _VERTICAL_KEYWORDS above."""
+        if not text:
+            return {}
+        counts = {vertical: len(pattern.findall(text)) for vertical, pattern in _VERTICAL_PATTERNS.items()}
+        counts = {k: v for k, v in counts.items() if v > 0}
+        total = sum(counts.values())
+        return {k: v / total for k, v in counts.items()} if total else {}
+
+    @staticmethod
     def vertical_weights(contact: dict) -> dict[str, float]:
         """Vertical name -> weight, normalized to sum to 1. Prefers the contact's own
-        contact_verticals tags; falls back to their firm's vertical_focus when the
-        contact has none of their own (currently always, since contact_verticals is
-        unpopulated everywhere)."""
+        contact_verticals tags; falls back to their firm's vertical_focus, then to
+        keyword inference from bio + portfolio text when neither structured source
+        has any tags (currently always, since contact_verticals and vertical_focus
+        are both unpopulated everywhere)."""
         own = contact.get("contact_verticals") or []
         if own:
             counts: dict[str, float] = defaultdict(float)
@@ -125,7 +179,10 @@ class ContactFeatureEncoder:
             if vertical:
                 counts[vertical] += 1.0
         total = sum(counts.values())
-        return {k: v / total for k, v in counts.items()} if total else {}
+        if total:
+            return {k: v / total for k, v in counts.items()}
+
+        return ContactFeatureEncoder._text_vertical_weights(ContactFeatureEncoder._personal_text(contact))
 
     @staticmethod
     def stage_distribution(contact: dict) -> dict[str, float]:
@@ -149,11 +206,6 @@ class ContactFeatureEncoder:
                 counts[stage] += 1.0
         total = sum(counts.values())
         return {k: v / total for k, v in counts.items()} if total else {}
-
-    @staticmethod
-    def dominant_stage(contact: dict) -> str | None:
-        dist = ContactFeatureEncoder.stage_distribution(contact)
-        return max(dist, key=dist.get) if dist else None
 
     @staticmethod
     def typical_check_size(contact: dict) -> float | None:

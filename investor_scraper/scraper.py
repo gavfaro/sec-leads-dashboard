@@ -629,12 +629,19 @@ def _parse_accel_company_page(html: str) -> dict:
             spans = value_el.find_all("span", recursive=False)
             if spans:
                 first_text = spans[0].get_text(strip=True)
-                # Older portfolio pages show just a year (e.g. "2012") with no stage label.
-                # Newer pages show "seed" + " in 2022" as two spans.
+                _STAGE_NORMALIZE = {
+                    "seed": "Seed", "pre-seed": "Pre-Seed", "growth": "Growth",
+                    "series a": "Series A", "series b": "Series B",
+                    "series c": "Series C", "series d": "Series D", "series e": "Series E",
+                }
                 if re.match(r"^\d{4}$", first_text):
+                    # Year-only format (older pages)
                     year = first_text
+                elif re.match(r"^\d{2}/\d{2}/\d{4}$", first_text):
+                    # Date format MM/DD/YYYY — extract year, no stage
+                    year = first_text[-4:]
                 else:
-                    stage = first_text.capitalize() or None
+                    stage = _STAGE_NORMALIZE.get(first_text.lower(), first_text.title()) or None
                     if len(spans) > 1:
                         m = re.search(r"\d{4}", spans[1].get_text(strip=True))
                         year = m.group(0) if m else None
