@@ -163,11 +163,16 @@ def parse_sequoia(html: str) -> list[dict]:
 
         investors = [n.strip() for n in re.split(r"[,\n]+", raw_partners) if n.strip()]
 
+        # cells[4] = "Stage (Year)" e.g. "Pre-Seed/Seed (2023)" or "Early (2021)"
+        year_match = re.search(r"\((\d{4})\)", cells[4]) if len(cells) > 4 else None
+        year_partnered = int(year_match.group(1)) if year_match else None
+
         companies.append({
             "name": name,
             "website": None,
             "description": description,
             "stage": stage,
+            "year_partnered": year_partnered,
             "status": None,
             "domain": None,
             "investors": investors,
@@ -367,7 +372,7 @@ def _parse_sequoia_partner_profile(html: str) -> dict:
     }
 
 
-def scrape_sequoia_team(sb: Client) -> None:
+def scrape_sequoia_team(sb: Client, dry_run: bool = False, limit: int | None = None) -> None:
     """
     Scrape Sequoia team profiles as the sole source of data.
 
@@ -376,7 +381,10 @@ def scrape_sequoia_team(sb: Client) -> None:
     data so the firm→company link exists. Companies without a named partner are skipped.
     """
     firm = FIRM_REGISTRY["sequoia"]
-    org_id = get_or_create_organization(sb, firm["name"], firm["entity_type"], firm.get("website"))
+    if dry_run:
+        org_id = "[DRY-RUN]"
+    else:
+        org_id = get_or_create_organization(sb, firm["name"], firm["entity_type"], firm.get("website"))
 
     # Collect (profile_url, role_label) pairs from all three listing pages.
     # Role label comes from the listing category, not the profile page.
@@ -391,7 +399,9 @@ def scrape_sequoia_team(sb: Client) -> None:
                 profile_entries.append((url, role_label))
         time.sleep(CRAWL_DELAY_SECONDS)
 
-    log.info("Found %d unique partner profiles", len(profile_entries))
+    if limit:
+        profile_entries = profile_entries[:limit]
+    log.info("Processing %d partner profiles%s", len(profile_entries), " [DRY-RUN]" if dry_run else "")
 
     for i, (profile_url, role_label) in enumerate(profile_entries):
         try:
@@ -404,35 +414,359 @@ def scrape_sequoia_team(sb: Client) -> None:
                 log.warning("  no name found, skipping")
                 continue
 
-            contact_id = get_or_create_contact(sb, org_id, p["name"])
-            update_contact_profile(
-                sb, contact_id,
-                bio=p["bio"],
-                email=p["email"],
-                role=role_label,
-                linkedin_url=p["linkedin_url"],
-                other_sites=p["other_sites"],
-            )
+            if dry_run:
+                log.info("  [DRY-RUN] %s (%s): bio=%s linkedin=%s — %d current / %d previous",
+                         p["name"], role_label, bool(p["bio"]), bool(p["linkedin_url"]),
+                         len(p["current_companies"]), len(p["previous_companies"]))
+                for c in p["current_companies"]:
+                    log.info("    CURRENT  %r — %r", c["name"], c["description"])
+                for c in p["previous_companies"]:
+                    log.info("    PREVIOUS %r — %r", c["name"], c["description"])
+            else:
+                contact_id = get_or_create_contact(sb, org_id, p["name"])
+                update_contact_profile(
+                    sb, contact_id,
+                    bio=p["bio"],
+                    email=p["email"],
+                    role=role_label,
+                    linkedin_url=p["linkedin_url"],
+                    other_sites=p["other_sites"],
+                )
+                for rel, companies in [("current", p["current_companies"]), ("previous", p["previous_companies"])]:
+                    for c in companies:
+                        company_id = upsert_company(sb, c["name"], None, c["description"])
+                        get_or_create_contact_investment(sb, contact_id, company_id, rel, None)
+                        get_or_create_portfolio_investment(sb, org_id, company_id, None)
 
-            n_current = len(p["current_companies"])
-            n_previous = len(p["previous_companies"])
-
-            for rel, companies in [("current", p["current_companies"]), ("previous", p["previous_companies"])]:
-                for c in companies:
-                    company_id = upsert_company(sb, c["name"], None, c["description"])
-                    get_or_create_contact_investment(sb, contact_id, company_id, rel, None)
-                    get_or_create_portfolio_investment(sb, org_id, company_id, None)
-
-            log.info(
-                "  %s (%s): bio=%s linkedin=%s — %d current / %d previous companies",
-                p["name"], role_label, bool(p["bio"]), bool(p["linkedin_url"]),
-                n_current, n_previous,
-            )
+                log.info(
+                    "  %s (%s): bio=%s linkedin=%s — %d current / %d previous companies",
+                    p["name"], role_label, bool(p["bio"]), bool(p["linkedin_url"]),
+                    len(p["current_companies"]), len(p["previous_companies"]),
+                )
 
         except Exception:
             log.exception("  failed, skipping")
 
         time.sleep(CRAWL_DELAY_SECONDS)
+
+
+# ---------------------------------------------------------------------------
+# Accel — team pages
+# ---------------------------------------------------------------------------
+# Accel's site never reaches networkidle (long-polling telemetry), so we use
+# wait_until="load" + a fixed post-load wait instead of fetch_rendered_html.
+
+def _fetch_accel(url: str) -> str:
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        ctx = browser.new_context(user_agent=USER_AGENT, viewport={"width": 1440, "height": 900})
+        page = ctx.new_page()
+        page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        page.goto(url, wait_until="load", timeout=90000)
+        page.wait_for_timeout(5000)
+        html = page.content()
+        ctx.close()
+        browser.close()
+    return html
+
+
+def _parse_accel_team_listing(html: str) -> list[str]:
+    """Return /team/<slug> profile URLs from the Accel team page (Global tab is default)."""
+    soup = BeautifulSoup(html, "html.parser")
+    seen: set[str] = set()
+    urls: list[str] = []
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        if re.match(r"^/team/[\w-]+$", href) and href not in seen:
+            seen.add(href)
+            urls.append(href)
+    return urls
+
+
+def _parse_accel_partner_profile(html: str) -> dict:
+    """
+    Parse an Accel partner profile page.
+
+    Left panel:
+      <h1>                          → name
+      <p class="leading-accel-tag"> Specialty </p> → next sibling div → role
+      <p class="leading-accel-tag"> Based in  </p> → next sibling <p> → location
+      <a aria-label="LinkedIn">     → linkedin_url  (personal /in/ links only)
+      <a aria-label="Twitter|X">    → twitter
+
+    Right panel:
+      <h2>About {Name}</h2>         → next sibling div → first <p> → bio
+      <p class="leading-accel-tag"> Relationships </p>
+        → parent div → <a href="/companies/..."> → <img alt="Name logo"> → company name
+        Stealth entries are <button> elements, not <a>, so they're naturally skipped.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+
+    # Name
+    name = ""
+    h1 = soup.find("h1")
+    if h1:
+        name = re.sub(r"\s+", " ", h1.get_text(strip=True)).strip()
+
+    # Role (Specialty) and location (Based in)
+    role: str | None = None
+    location: str | None = None
+    for label_p in soup.find_all("p", class_=lambda c: c and "leading-accel-tag" in c):
+        label = label_p.get_text(strip=True).lower()
+        value_el = label_p.find_next_sibling()
+        if not value_el:
+            continue
+        value = value_el.get_text(" ", strip=True).strip() or None
+        if "specialty" in label:
+            role = value
+        elif "based in" in label:
+            location = value
+
+    # Bio — first <p> after the "About <Name>" h2
+    bio: str | None = None
+    for h2 in soup.find_all("h2"):
+        if h2.get_text(" ", strip=True).startswith("About "):
+            sib = h2.find_next_sibling()
+            if sib:
+                first_p = sib.find("p")
+                if first_p:
+                    bio = first_p.get_text(" ", strip=True) or None
+            break
+
+    # Social links — use aria-label to target personal profiles, not Accel's company pages
+    linkedin_url: str | None = None
+    twitter_url: str | None = None
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        label = (a.get("aria-label") or "").lower()
+        if label == "linkedin" and "linkedin.com/in/" in href:
+            linkedin_url = href
+        elif label in ("twitter", "x") and ("twitter.com/" in href or "x.com/" in href):
+            if not href.rstrip("/").endswith("/accel"):  # exclude @accel footer link
+                twitter_url = href
+
+    other_sites: dict = {}
+    if twitter_url:
+        other_sites["twitter"] = twitter_url
+    if location:
+        other_sites["location"] = location
+
+    # Companies from Relationships section
+    # <p class="leading-accel-tag">Relationships</p> → parent → <a href="/companies/...">
+    # Each entry includes the slug so scrape_accel_team can fetch the company page for description.
+    companies: list[dict] = []
+    for label_p in soup.find_all("p", class_=lambda c: c and "leading-accel-tag" in c):
+        if "relationship" in label_p.get_text(strip=True).lower():
+            container = label_p.parent
+            for a in container.find_all("a", href=True):
+                href = a["href"]
+                if not href.startswith("/companies/"):
+                    continue
+                co_slug = href.split("/companies/")[-1].rstrip("/")
+                img = a.find("img")
+                if not img:
+                    continue
+                alt = img.get("alt", "").strip()
+                # Strip " logo" suffix (present on some, absent on others e.g. "Tolmo")
+                company_name = re.sub(r"\s+logo\s*$", "", alt, flags=re.IGNORECASE).strip()
+                if not company_name:
+                    # Fall back to slug: /companies/periodic-labs → "Periodic Labs"
+                    company_name = co_slug.replace("-", " ").title()
+                if company_name:
+                    companies.append({"name": company_name, "slug": co_slug})
+            break
+
+    return {
+        "name": name,
+        "bio": bio,
+        "role": role,
+        "location": location,
+        "linkedin_url": linkedin_url,
+        "other_sites": other_sites or None,
+        "companies": companies,
+    }
+
+
+def _parse_accel_company_page(html: str) -> dict:
+    """
+    Parse an Accel company page (https://www.accel.com/companies/<slug>).
+
+    <h1><p>Next-gen Python tooling</p></h1>         → description (tagline)
+    <a aria-label="Website" href="...">              → website
+    <p "leading-accel-tag">Initial Investment</p>
+      → next span → first <span> = stage, second <span> = " in 2022" → year
+    <p "leading-accel-tag">Acquired</p>
+      → next span → text = "by OpenAI" → acquired_by = "OpenAI"
+    """
+    soup = BeautifulSoup(html, "html.parser")
+
+    description: str | None = None
+    h1 = soup.find("h1")
+    if h1:
+        inner_p = h1.find("p")
+        text = (inner_p or h1).get_text(" ", strip=True)
+        description = text or None
+
+    website: str | None = None
+    for a in soup.find_all("a", href=True):
+        if (a.get("aria-label") or "").lower() == "website":
+            href = a["href"]
+            if href.startswith("http"):
+                website = href
+                break
+
+    stage: str | None = None
+    year: str | None = None
+    acquired_by: str | None = None
+
+    for label_p in soup.find_all("p", class_=lambda c: c and "leading-accel-tag" in c):
+        label = label_p.get_text(strip=True).lower()
+        value_el = label_p.find_next_sibling()
+        if not value_el:
+            continue
+
+        if "initial investment" in label:
+            spans = value_el.find_all("span", recursive=False)
+            if spans:
+                first_text = spans[0].get_text(strip=True)
+                # Older portfolio pages show just a year (e.g. "2012") with no stage label.
+                # Newer pages show "seed" + " in 2022" as two spans.
+                if re.match(r"^\d{4}$", first_text):
+                    year = first_text
+                else:
+                    stage = first_text.capitalize() or None
+                    if len(spans) > 1:
+                        m = re.search(r"\d{4}", spans[1].get_text(strip=True))
+                        year = m.group(0) if m else None
+
+        elif "acquired" in label:
+            raw = value_el.get_text(" ", strip=True)
+            acquired_by = re.sub(r"^by\s+", "", raw, flags=re.IGNORECASE).strip() or None
+
+    return {
+        "description": description,
+        "website": website,
+        "stage": stage,
+        "year": year,
+        "acquired_by": acquired_by,
+    }
+
+
+def scrape_accel_team(sb: Client, dry_run: bool = False, limit: int | None = None) -> None:
+    """
+    Scrape Accel team profiles.
+
+    Two-phase approach:
+      Phase 1 — fetch all partner profile pages, collect (partner data, company slugs)
+      Phase 2 — fetch each unique company page once to get description + website
+      Phase 3 — write everything to DB
+
+    This avoids re-fetching a company that appears on multiple partners' pages.
+    Accel doesn't distinguish current vs previous investments — all stored as "current".
+    Location is stored in contact other_sites["location"].
+    """
+    org_name = "Accel"
+    org_website = "https://www.accel.com"
+    entity_type = "Multi-Stage VC"
+
+    # ── Phase 1: collect all partner profiles ────────────────────────────────
+    log.info("Fetching Accel team listing")
+    listing_html = _fetch_accel("https://www.accel.com/team")
+    profile_slugs = _parse_accel_team_listing(listing_html)
+    if limit:
+        profile_slugs = profile_slugs[:limit]
+    log.info("Found %d profiles%s", len(profile_slugs), " [DRY-RUN]" if dry_run else "")
+
+    all_profiles: list[dict] = []
+    for i, slug in enumerate(profile_slugs):
+        profile_url = f"https://www.accel.com{slug}"
+        try:
+            log.info("[%d/%d] Fetching partner profile %s", i + 1, len(profile_slugs), profile_url)
+            html = _fetch_accel(profile_url)
+            p = _parse_accel_partner_profile(html)
+            if not p["name"]:
+                log.warning("  no name found, skipping")
+            else:
+                log.info("  %s | role=%r | %d companies", p["name"], p["role"], len(p["companies"]))
+                all_profiles.append(p)
+        except Exception:
+            log.exception("  failed, skipping")
+        time.sleep(CRAWL_DELAY_SECONDS)
+
+    # ── Phase 2: fetch each unique company page once ──────────────────────────
+    # Collect unique slugs preserving first-seen order
+    seen_slugs: set[str] = set()
+    unique_companies: list[dict] = []  # {name, slug}
+    for p in all_profiles:
+        for c in p["companies"]:
+            if c["slug"] not in seen_slugs:
+                seen_slugs.add(c["slug"])
+                unique_companies.append(c)
+
+    log.info("Fetching %d unique company pages%s", len(unique_companies), " [DRY-RUN]" if dry_run else "")
+
+    # company_cache: slug → {name, description, website}
+    company_cache: dict[str, dict] = {}
+    for i, c in enumerate(unique_companies):
+        company_url = f"https://www.accel.com/companies/{c['slug']}"
+        try:
+            log.info("[%d/%d] %s", i + 1, len(unique_companies), company_url)
+            if dry_run:
+                # Don't fetch in dry-run; just record the slug
+                company_cache[c["slug"]] = {"name": c["name"], "description": None, "website": None}
+            else:
+                html = _fetch_accel(company_url)
+                co_data = _parse_accel_company_page(html)
+                company_cache[c["slug"]] = {
+                    "name": c["name"],
+                    "description": co_data["description"],
+                    "website": co_data["website"],
+                }
+                log.info("  desc=%r  website=%s", co_data["description"], bool(co_data["website"]))
+        except Exception:
+            log.exception("  failed, using name-only fallback")
+            company_cache[c["slug"]] = {"name": c["name"], "description": None, "website": None}
+        if not dry_run:
+            time.sleep(CRAWL_DELAY_SECONDS)
+
+    # ── Phase 3: write to DB (or log in dry-run) ─────────────────────────────
+    if dry_run:
+        log.info("[DRY-RUN] Would write %d partners and %d companies to DB",
+                 len(all_profiles), len(unique_companies))
+        for p in all_profiles:
+            log.info("  PARTNER %s | role=%r | location=%r | bio=%s | linkedin=%s | %d companies",
+                     p["name"], p["role"], p["location"],
+                     bool(p["bio"]), bool(p["linkedin_url"]), len(p["companies"]))
+            for c in p["companies"]:
+                co = company_cache.get(c["slug"], c)
+                log.info("    COMPANY %r (desc=%s website=%s)",
+                         co["name"], bool(co.get("description")), bool(co.get("website")))
+        return
+
+    org_id = get_or_create_organization(sb, org_name, entity_type, org_website)
+    for p in all_profiles:
+        try:
+            contact_id = get_or_create_contact(sb, org_id, p["name"])
+            update_contact_profile(
+                sb, contact_id,
+                bio=p["bio"],
+                email=None,
+                role=p["role"],
+                linkedin_url=p["linkedin_url"],
+                other_sites=p["other_sites"],
+            )
+            for c in p["companies"]:
+                co = company_cache.get(c["slug"], {"name": c["name"], "description": None, "website": None, "stage": None, "acquired_by": None})
+                company_id = upsert_company(sb, co["name"], co.get("website"), co.get("description"))
+                acquired_by = co.get("acquired_by")
+                relationship = "previous" if acquired_by else "current"
+                exit_note = f"Acquired by {acquired_by}" if acquired_by else None
+                get_or_create_contact_investment(sb, contact_id, company_id, relationship, exit_note)
+                year = int(co["year"]) if co.get("year") else None
+                get_or_create_portfolio_investment(sb, org_id, company_id, co.get("stage"), year)
+            log.info("Wrote %s: %d companies", p["name"], len(p["companies"]))
+        except Exception:
+            log.exception("Failed writing %r, skipping", p.get("name"))
 
 
 FIRM_REGISTRY = {
@@ -549,18 +883,28 @@ def get_or_create_contact(sb: Client, org_id: str, full_name: str) -> str:
     return inserted.data[0]["id"]
 
 
-def get_or_create_portfolio_investment(sb: Client, org_id: str, company_id: str, stage: str | None) -> None:
+def get_or_create_portfolio_investment(
+    sb: Client, org_id: str, company_id: str,
+    stage: str | None, year_partnered: int | None = None,
+) -> None:
     existing = (
         sb.table("portfolio_investments")
-        .select("id")
+        .select("id, investment_stage, year_partnered")
         .eq("org_id", org_id)
         .eq("company_id", company_id)
         .execute()
     )
     if existing.data:
+        updates = {}
+        if stage and not existing.data[0]["investment_stage"]:
+            updates["investment_stage"] = stage
+        if year_partnered and not existing.data[0]["year_partnered"]:
+            updates["year_partnered"] = year_partnered
+        if updates:
+            sb.table("portfolio_investments").update(updates).eq("id", existing.data[0]["id"]).execute()
         return
     sb.table("portfolio_investments").insert(
-        {"org_id": org_id, "company_id": company_id, "investment_stage": stage}
+        {"org_id": org_id, "company_id": company_id, "investment_stage": stage, "year_partnered": year_partnered}
     ).execute()
 
 
@@ -751,18 +1095,23 @@ def parse_bio_pdf(pdf_bytes: bytes) -> dict:
     return {"bio": bio, "current": current, "previous": previous}
 
 
-def scrape_greylock_team(sb: Client) -> None:
+def scrape_greylock_team(sb: Client, dry_run: bool = False, limit: int | None = None) -> None:
     firm = FIRM_REGISTRY["greylock"]
     team_url = "https://greylock.com/team/"
 
     parsed = urlparse(firm["url"])
     homepage = f"{parsed.scheme}://{parsed.netloc}/"
-    org_id = get_or_create_organization(sb, firm["name"], firm["entity_type"], homepage)
+    if dry_run:
+        org_id = "[DRY-RUN]"
+    else:
+        org_id = get_or_create_organization(sb, firm["name"], firm["entity_type"], homepage)
 
     log.info("Fetching investor listing from %s", team_url)
     html = fetch_rendered_html(team_url)
     investors = parse_greylock_team_listing(html)
-    log.info("Found %d investors", len(investors))
+    if limit:
+        investors = investors[:limit]
+    log.info("Processing %d investors%s", len(investors), " [DRY-RUN]" if dry_run else "")
 
     for i, investor in enumerate(investors):
         try:
@@ -770,8 +1119,6 @@ def scrape_greylock_team(sb: Client) -> None:
             log.info("Fetching profile: %s (%s)", investor["name"], investor["profile_url"])
             profile_html = fetch_rendered_html(investor["profile_url"])
             profile = parse_greylock_investor_profile(profile_html)
-
-            contact_id = get_or_create_contact(sb, org_id, investor["name"])
 
             bio = profile["tagline"]
             current, previous = [], []
@@ -784,26 +1131,31 @@ def scrape_greylock_team(sb: Client) -> None:
             else:
                 log.warning("%s: no bio PDF found, capturing tagline/contact info only", investor["name"])
 
-            update_contact_profile(
-                sb, contact_id, bio, profile["email"], investor["role"], profile["linkedin_url"], profile["other_sites"]
-            )
+            if dry_run:
+                log.info("  [DRY-RUN] %s (%s): bio=%s email=%s — %d current / %d previous",
+                         investor["name"], investor["role"], bool(bio), profile["email"],
+                         len(current), len(previous))
+                for item in current:
+                    log.info("    CURRENT  %r — note=%r", item["company"], item["note"])
+                for item in previous:
+                    log.info("    PREVIOUS %r — note=%r", item["company"], item["note"])
+            else:
+                contact_id = get_or_create_contact(sb, org_id, investor["name"])
+                update_contact_profile(
+                    sb, contact_id, bio, profile["email"], investor["role"],
+                    profile["linkedin_url"], profile["other_sites"]
+                )
+                for item in current:
+                    company_id = upsert_company(sb, item["company"], None, None)
+                    get_or_create_contact_investment(sb, contact_id, company_id, "current", item["note"])
+                for item in previous:
+                    company_id = upsert_company(sb, item["company"], None, None)
+                    get_or_create_contact_investment(sb, contact_id, company_id, "previous", item["note"])
 
-            for item in current:
-                company_id = upsert_company(sb, item["company"], None, None)
-                get_or_create_contact_investment(sb, contact_id, company_id, "current", item["note"])
-
-            for item in previous:
-                company_id = upsert_company(sb, item["company"], None, None)
-                get_or_create_contact_investment(sb, contact_id, company_id, "previous", item["note"])
-
-            log.info(
-                "%s: captured bio=%s email=%s, %d current / %d previous investments",
-                investor["name"],
-                bool(bio),
-                profile["email"],
-                len(current),
-                len(previous),
-            )
+                log.info(
+                    "%s: captured bio=%s email=%s, %d current / %d previous investments",
+                    investor["name"], bool(bio), profile["email"], len(current), len(previous),
+                )
         except Exception:
             log.exception("Failed to process investor %r, skipping", investor.get("name"))
 
@@ -837,7 +1189,7 @@ def scrape_firm(sb: Client, firm_key: str) -> None:
             if not c["description"]:
                 log.warning("%s: no description found on site, inserted with null description", c["name"])
 
-            get_or_create_portfolio_investment(sb, org_id, company_id, c["stage"])
+            get_or_create_portfolio_investment(sb, org_id, company_id, c["stage"], c.get("year_partnered"))
 
             if not c["investors"]:
                 log.warning("%s: no partner/investor listed, skipping contact linkage", c["name"])
@@ -860,23 +1212,43 @@ def scrape_firm(sb: Client, firm_key: str) -> None:
 TEAM_SCRAPERS = {
     "greylock": scrape_greylock_team,
     "sequoia": scrape_sequoia_team,
+    "accel": scrape_accel_team,
 }
 
 
 def main() -> None:
-    sb = get_supabase()
-    args = sys.argv[1:]
+    import argparse
 
-    if args and args[0] == "team":
-        firm_keys = args[1:] or list(TEAM_SCRAPERS.keys())
+    ap = argparse.ArgumentParser(
+        description="Scrape VC firm portfolio and team data into Supabase.",
+        usage="%(prog)s [team] [firm ...] [--dry-run] [--limit N]",
+    )
+    ap.add_argument("positional", nargs="*", help="'team' then firm keys, or just firm keys")
+    ap.add_argument("--dry-run", action="store_true",
+                    help="Fetch and parse but write nothing to the database")
+    ap.add_argument("--limit", type=int, default=None, metavar="N",
+                    help="Process at most N profiles (useful for testing a new parser)")
+    opts = ap.parse_args()
+
+    dry_run: bool = opts.dry_run
+    limit: int | None = opts.limit
+    positional: list[str] = opts.positional
+
+    if dry_run:
+        log.info("=== DRY-RUN MODE — no database writes will occur ===")
+
+    sb = get_supabase()
+
+    if positional and positional[0] == "team":
+        firm_keys = positional[1:] or list(TEAM_SCRAPERS.keys())
         for firm_key in firm_keys:
             if firm_key not in TEAM_SCRAPERS:
                 log.error("No team scraper for %r. Available: %s", firm_key, list(TEAM_SCRAPERS.keys()))
                 continue
-            TEAM_SCRAPERS[firm_key](sb)
+            TEAM_SCRAPERS[firm_key](sb, dry_run=dry_run, limit=limit)
         return
 
-    firm_keys = args or list(FIRM_REGISTRY.keys())
+    firm_keys = positional or list(FIRM_REGISTRY.keys())
     for i, firm_key in enumerate(firm_keys):
         if firm_key not in FIRM_REGISTRY:
             log.error("Unknown firm %r. Available: %s", firm_key, list(FIRM_REGISTRY.keys()))

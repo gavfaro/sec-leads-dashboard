@@ -1,5 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
-import FindInvestors, { CompanyEntry } from "../components/FindInvestors";
+import FindInvestorsHub from "../components/FindInvestorsHub";
+import { CompanyEntry } from "../components/FindInvestors";
+import { MatchRunEntry } from "../components/MatchingEngine";
 
 function getServiceClient() {
   return createClient(
@@ -11,16 +13,28 @@ function getServiceClient() {
 export default async function FindInvestorsPage() {
   const sb = getServiceClient();
 
-  const [ciRes, contactsRes, orgsRes, companiesRes] = await Promise.all([
-    sb
-      .from("contact_investments")
-      .select("contact_id, company_id, relationship"),
-    sb
-      .from("contacts")
-      .select("id, first_name, last_name, role, linkedin_url, org_id"),
-    sb.from("organizations").select("id, name"),
-    sb.from("companies").select("id, name, description"),
-  ]);
+  const [ciRes, contactsRes, orgsRes, companiesRes, matchRunsRes, matchResultsRes] =
+    await Promise.all([
+      sb
+        .from("contact_investments")
+        .select("contact_id, company_id, relationship"),
+      sb
+        .from("contacts")
+        .select("id, first_name, last_name, role, linkedin_url, org_id"),
+      sb.from("organizations").select("id, name"),
+      sb.from("companies").select("id, name, description"),
+      sb
+        .from("match_runs")
+        .select("id, startup_name, startup_input, created_at")
+        .order("created_at", { ascending: false }),
+      sb
+        .from("match_results")
+        .select(
+          "match_run_id, rank, score, score_breakdown, contact_id, " +
+            "contacts(first_name, last_name, role, linkedin_url, org_id, organizations(name))",
+        )
+        .order("rank"),
+    ]);
 
   const contactMap = new Map(
     (contactsRes.data ?? []).map((c) => [c.id, c]),
@@ -61,6 +75,48 @@ export default async function FindInvestorsPage() {
     }))
     .sort((a, b) => a.name.localeCompare(b.name));
 
+  // Group match_results by run, joined with the run's own metadata
+  const resultsByRun = new Map<string, MatchRunEntry["results"]>();
+  for (const r of (matchResultsRes.data ?? []) as any[]) {
+    const contact = Array.isArray(r.contacts) ? r.contacts[0] : r.contacts;
+    const org = Array.isArray(contact?.organizations)
+      ? contact.organizations[0]
+      : contact?.organizations;
+    if (!resultsByRun.has(r.match_run_id)) resultsByRun.set(r.match_run_id, []);
+    resultsByRun.get(r.match_run_id)!.push({
+      contactId: r.contact_id,
+      contactName: contact
+        ? `${contact.first_name} ${contact.last_name}`
+        : "Unknown",
+      role: contact?.role ?? null,
+      linkedinUrl: contact?.linkedin_url ?? null,
+      orgId: contact?.org_id ?? "",
+      orgName: org?.name ?? "Unknown",
+      rank: r.rank,
+      score: r.score,
+      scoreBreakdown: r.score_breakdown,
+    });
+  }
+
+  const matchRuns: MatchRunEntry[] = (matchRunsRes.data ?? []).map((run) => {
+    const input = (run.startup_input ?? {}) as {
+      verticals?: string[];
+      stage?: string;
+      target_raise?: number;
+      description?: string;
+    };
+    return {
+      id: run.id,
+      startupName: run.startup_name,
+      verticals: input.verticals ?? [],
+      stage: input.stage ?? null,
+      targetRaise: input.target_raise ?? null,
+      description: input.description ?? null,
+      createdAt: run.created_at,
+      results: resultsByRun.get(run.id) ?? [],
+    };
+  });
+
   return (
     <div className="max-w-7xl mx-auto p-4 font-sans text-black pb-16">
       <header className="mb-6 border-b-4 border-black pb-4 flex flex-wrap gap-4 justify-between items-end">
@@ -79,7 +135,7 @@ export default async function FindInvestorsPage() {
         </div>
       </header>
 
-      <FindInvestors companies={companies} />
+      <FindInvestorsHub companies={companies} matchRuns={matchRuns} />
     </div>
   );
 }
