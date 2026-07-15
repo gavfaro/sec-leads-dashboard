@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import FilterForm from "./components/FilterForm"; // Import our new Client Component
+import NewestLeads from "./components/NewestLeads";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -203,6 +204,8 @@ export default async function SECDashboard({ searchParams }: PageProps) {
           Results: {count || 0}
         </div>
       </header>
+
+      <NewestLeads />
 
       {/* Insert the Filter Control Panel here */}
       <FilterForm />
