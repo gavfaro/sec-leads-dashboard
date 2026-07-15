@@ -11,13 +11,55 @@ const ITEMS_PER_PAGE = 15;
 interface PageProps {
   searchParams: Promise<{
     page?: string;
-    minRaise?: string;
+    name?: string;
+    cik?: string;
+    city?: string;
     state?: string;
     industry?: string;
+    entityType?: string;
+    fundType?: string;
     type?: string;
-    name?: string;
+    minRaise?: string;
+    maxRaise?: string;
+    offeringType?: string;
+    minSold?: string;
+    maxSold?: string;
+    minCheck?: string;
+    maxCheck?: string;
+    revenueRange?: string;
+    exemption?: string;
+    accredited?: string;
+    phoneOnly?: string;
+    dateFrom?: string;
+    dateTo?: string;
+    sort?: string;
   }>;
 }
+
+const FILTER_KEYS = [
+  "name",
+  "cik",
+  "city",
+  "state",
+  "industry",
+  "entityType",
+  "fundType",
+  "type",
+  "minRaise",
+  "maxRaise",
+  "offeringType",
+  "minSold",
+  "maxSold",
+  "minCheck",
+  "maxCheck",
+  "revenueRange",
+  "exemption",
+  "accredited",
+  "phoneOnly",
+  "dateFrom",
+  "dateTo",
+  "sort",
+] as const;
 
 function getSecUrls(cik: number | string, accessionNumber: string) {
   if (!accessionNumber || !cik) return { indexUrl: "#", xmlUrl: "#" };
@@ -34,11 +76,28 @@ export default async function SECDashboard({ searchParams }: PageProps) {
 
   // 1. Extract URL Parameters
   const currentPage = Math.max(1, parseInt(resolvedParams.page || "1", 10));
-  const minRaise = parseInt(resolvedParams.minRaise || "0", 10);
+  const nameSearch = resolvedParams.name || "";
+  const cik = resolvedParams.cik || "";
+  const city = resolvedParams.city || "";
   const stateCode = resolvedParams.state || "";
   const industry = resolvedParams.industry || "";
+  const entityType = resolvedParams.entityType || "";
+  const fundType = resolvedParams.fundType || "";
   const submissionType = resolvedParams.type || "";
-  const nameSearch = resolvedParams.name || "";
+  const minRaise = parseInt(resolvedParams.minRaise || "", 10);
+  const maxRaise = parseInt(resolvedParams.maxRaise || "", 10);
+  const offeringType = resolvedParams.offeringType || "";
+  const minSold = parseInt(resolvedParams.minSold || "", 10);
+  const maxSold = parseInt(resolvedParams.maxSold || "", 10);
+  const minCheck = parseInt(resolvedParams.minCheck || "", 10);
+  const maxCheck = parseInt(resolvedParams.maxCheck || "", 10);
+  const revenueRange = resolvedParams.revenueRange || "";
+  const exemption = resolvedParams.exemption || "";
+  const accredited = resolvedParams.accredited || "";
+  const phoneOnly = resolvedParams.phoneOnly === "true";
+  const dateFrom = resolvedParams.dateFrom || "";
+  const dateTo = resolvedParams.dateTo || "";
+  const sort = resolvedParams.sort || "date_desc";
 
   const from = (currentPage - 1) * ITEMS_PER_PAGE;
   const to = from + ITEMS_PER_PAGE - 1;
@@ -53,18 +112,61 @@ export default async function SECDashboard({ searchParams }: PageProps) {
 
   // 3. Stack the Boolean Filters
   if (nameSearch) query = query.ilike("company_name", `%${nameSearch}%`);
-  if (minRaise > 0) query = query.gte("target_raise", minRaise);
+  if (cik) query = query.eq("cik", parseInt(cik, 10));
+  if (city) query = query.ilike("city", `%${city}%`);
   if (stateCode) query = query.ilike("state", stateCode);
-  // Trailing wildcard only — leading % disables index usage and causes full table scans
-  if (industry) query = query.ilike("industry", `${industry}%`);
+  if (industry) query = query.eq("industry", industry);
+  if (entityType) query = query.eq("entity_type", entityType);
+  if (fundType === "NONE") query = query.is("investment_fund_type", null);
+  else if (fundType) query = query.eq("investment_fund_type", fundType);
   if (submissionType) query = query.eq("submission_type", submissionType);
+
+  // Numeric ranges run against the numeric-safe columns added in migration
+  // 0004 — target_raise/amount_sold/min_investment can't be trusted for
+  // comparisons directly (target_raise is text and holds "Indefinite").
+  if (!isNaN(minRaise)) query = query.gte("target_raise_numeric", minRaise);
+  if (!isNaN(maxRaise)) query = query.lte("target_raise_numeric", maxRaise);
+  if (offeringType === "fixed")
+    query = query.eq("is_indefinite_offering", false);
+  else if (offeringType === "indefinite")
+    query = query.eq("is_indefinite_offering", true);
+
+  if (!isNaN(minSold)) query = query.gte("amount_sold", minSold);
+  if (!isNaN(maxSold)) query = query.lte("amount_sold", maxSold);
+
+  if (!isNaN(minCheck)) query = query.gte("min_investment", minCheck);
+  if (!isNaN(maxCheck)) query = query.lte("min_investment", maxCheck);
+
+  if (revenueRange) query = query.eq("revenue_range", revenueRange);
+  if (exemption) query = query.ilike("federal_exemptions", `%${exemption}%`);
+  if (accredited)
+    query = query.eq("has_non_accredited_investors", accredited === "true");
+  if (phoneOnly) query = query.not("issuer_phone", "is", null);
+
+  if (dateFrom) query = query.gte("filing_date_parsed", dateFrom);
+  if (dateTo) query = query.lte("filing_date_parsed", dateTo);
+
+  // 4. Sort — filing_date is stored as text ("DD-MON-YYYY"), so ordering by
+  // it directly sorts alphabetically, not chronologically. Use the
+  // migration's parsed/numeric columns instead.
+  const sortMap: Record<string, { column: string; ascending: boolean }> = {
+    date_desc: { column: "filing_date_parsed", ascending: false },
+    date_asc: { column: "filing_date_parsed", ascending: true },
+    raise_desc: { column: "target_raise_numeric", ascending: false },
+    sold_desc: { column: "amount_sold", ascending: false },
+    name_asc: { column: "company_name", ascending: true },
+  };
+  const { column: sortColumn, ascending: sortAscending } =
+    sortMap[sort] || sortMap.date_desc;
 
   // 4. Execute the Query
   const {
     data: profiles,
     count,
     error,
-  } = await query.order("filing_date", { ascending: false }).range(from, to);
+  } = await query
+    .order(sortColumn, { ascending: sortAscending, nullsFirst: false })
+    .range(from, to);
 
   if (error) {
     return (
@@ -78,13 +180,10 @@ export default async function SECDashboard({ searchParams }: PageProps) {
 
   // Preserve filters when paginating
   const filterParams = new URLSearchParams();
-  if (resolvedParams.name) filterParams.set("name", resolvedParams.name);
-  if (resolvedParams.minRaise)
-    filterParams.set("minRaise", resolvedParams.minRaise);
-  if (resolvedParams.state) filterParams.set("state", resolvedParams.state);
-  if (resolvedParams.industry)
-    filterParams.set("industry", resolvedParams.industry);
-  if (resolvedParams.type) filterParams.set("type", resolvedParams.type);
+  for (const key of FILTER_KEYS) {
+    const value = resolvedParams[key];
+    if (value) filterParams.set(key, value);
+  }
   const baseQueryString = filterParams.toString()
     ? `&${filterParams.toString()}`
     : "";

@@ -66,7 +66,7 @@ export default async function CompanyProfile({ params }: ProfileProps) {
         "ACCESSIONNUMBER, filing_date, submission_type, target_raise, amount_sold",
       )
       .eq("cik", issuer.CIK)
-      .order("filing_date", { ascending: false }),
+      .order("filing_date_parsed", { ascending: false, nullsFirst: false }),
     supabase
       .from("ai_profiles")
       .select("*")
