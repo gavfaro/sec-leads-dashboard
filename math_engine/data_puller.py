@@ -54,7 +54,7 @@ def fetch_investor_data() -> list[dict]:
     contacts_res = (
         supabase.table("contacts")
         .select(
-            "id, first_name, last_name, role, linkedin_url, bio, org_id, "
+            "id, first_name, last_name, role, linkedin_url, bio, org_id, typical_check_size, "
             "organizations(name), "
             "contact_verticals(verticals(vertical_name)), "
             "contact_investments(relationship, company_id, companies(name, description))"
@@ -87,6 +87,7 @@ def fetch_investor_data() -> list[dict]:
             "bio": c.get("bio") or "",
             "org_id": org_id,
             "org_name": org.get("name"),
+            "typical_check_size": c.get("typical_check_size"),
             "contact_verticals": [
                 cv["verticals"]["vertical_name"]
                 for cv in (c.get("contact_verticals") or [])

@@ -9,9 +9,11 @@ type Mode = "fuzzy" | "match";
 export default function FindInvestorsHub({
   companies,
   matchRuns,
+  verticals,
 }: {
   companies: CompanyEntry[];
   matchRuns: MatchRunEntry[];
+  verticals: string[];
 }) {
   const [mode, setMode] = useState<Mode>("fuzzy");
 
@@ -41,7 +43,7 @@ export default function FindInvestorsHub({
       {mode === "fuzzy" ? (
         <FindInvestors companies={companies} />
       ) : (
-        <MatchingEngine runs={matchRuns} />
+        <MatchingEngine runs={matchRuns} verticals={verticals} />
       )}
     </div>
   );

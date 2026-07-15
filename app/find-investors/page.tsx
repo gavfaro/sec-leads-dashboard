@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import FindInvestorsHub from "../components/FindInvestorsHub";
 import { CompanyEntry } from "../components/FindInvestors";
 import { MatchRunEntry } from "../components/MatchingEngine";
+import { MATCH_RESULT_SELECT, shapeMatchResultRow, shapeMatchRun } from "@/lib/matchRuns";
 
 export const dynamic = "force-dynamic";
 
@@ -15,7 +16,7 @@ function getServiceClient() {
 export default async function FindInvestorsPage() {
   const sb = getServiceClient();
 
-  const [ciRes, contactsRes, orgsRes, companiesRes, matchRunsRes, matchResultsRes] =
+  const [ciRes, contactsRes, orgsRes, companiesRes, verticalsRes, matchRunsRes, matchResultsRes] =
     await Promise.all([
       sb
         .from("contact_investments")
@@ -25,19 +26,12 @@ export default async function FindInvestorsPage() {
         .select("id, first_name, last_name, role, linkedin_url, org_id"),
       sb.from("organizations").select("id, name"),
       sb.from("companies").select("id, name, description"),
+      sb.from("verticals").select("vertical_name").order("vertical_name"),
       sb
         .from("match_runs")
         .select("id, startup_name, startup_input, created_at")
         .order("created_at", { ascending: false }),
-      sb
-        .from("match_results")
-        .select(
-          "match_run_id, rank, score, score_breakdown, contact_id, " +
-            "contacts(first_name, last_name, role, linkedin_url, bio, org_id, " +
-            "organizations(name), " +
-            "contact_investments(relationship, companies(id, name, description)))",
-        )
-        .order("rank"),
+      sb.from("match_results").select(MATCH_RESULT_SELECT).order("rank"),
     ]);
 
   const contactMap = new Map(
@@ -82,45 +76,15 @@ export default async function FindInvestorsPage() {
   // Group match_results by run, joined with the run's own metadata
   const resultsByRun = new Map<string, MatchRunEntry["results"]>();
   for (const r of (matchResultsRes.data ?? []) as any[]) {
-    const contact = Array.isArray(r.contacts) ? r.contacts[0] : r.contacts;
-    const org = Array.isArray(contact?.organizations)
-      ? contact.organizations[0]
-      : contact?.organizations;
     if (!resultsByRun.has(r.match_run_id)) resultsByRun.set(r.match_run_id, []);
-    resultsByRun.get(r.match_run_id)!.push({
-      contactId: r.contact_id,
-      firstName: contact?.first_name ?? "Unknown",
-      lastName: contact?.last_name ?? "",
-      role: contact?.role ?? null,
-      linkedinUrl: contact?.linkedin_url ?? null,
-      bio: contact?.bio ?? null,
-      investments: contact?.contact_investments ?? [],
-      orgId: contact?.org_id ?? "",
-      orgName: org?.name ?? "Unknown",
-      rank: r.rank,
-      score: r.score,
-      scoreBreakdown: r.score_breakdown,
-    });
+    resultsByRun.get(r.match_run_id)!.push(shapeMatchResultRow(r));
   }
 
-  const matchRuns: MatchRunEntry[] = (matchRunsRes.data ?? []).map((run) => {
-    const input = (run.startup_input ?? {}) as {
-      verticals?: string[];
-      stage?: string;
-      target_raise?: number;
-      description?: string;
-    };
-    return {
-      id: run.id,
-      startupName: run.startup_name,
-      verticals: input.verticals ?? [],
-      stage: input.stage ?? null,
-      targetRaise: input.target_raise ?? null,
-      description: input.description ?? null,
-      createdAt: run.created_at,
-      results: resultsByRun.get(run.id) ?? [],
-    };
-  });
+  const matchRuns: MatchRunEntry[] = (matchRunsRes.data ?? []).map((run) =>
+    shapeMatchRun(run, resultsByRun.get(run.id) ?? []),
+  );
+
+  const verticals = (verticalsRes.data ?? []).map((v) => v.vertical_name);
 
   return (
     <div className="max-w-7xl mx-auto p-4 font-sans text-black pb-16">
@@ -140,7 +104,7 @@ export default async function FindInvestorsPage() {
         </div>
       </header>
 
-      <FindInvestorsHub companies={companies} matchRuns={matchRuns} />
+      <FindInvestorsHub companies={companies} matchRuns={matchRuns} verticals={verticals} />
     </div>
   );
 }

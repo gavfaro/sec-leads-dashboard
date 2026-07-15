@@ -44,6 +44,21 @@ _STAGE_ORDER = {stage: i for i, stage in enumerate(STAGE_VOCABULARY)}
 # stage focus -- lets a fund's *current* behavior dominate its historical portfolio.
 _RECENCY_HALF_LIFE_YEARS = 5.0
 
+# Rough industry-standard check sizes per stage, used only as a last-resort proxy
+# when neither a contact's own manually-entered typical_check_size nor their firm's
+# vertical_focus has real data (true for nearly everyone today). These are broad
+# market medians, not sourced from our own data -- meant to be superseded by real
+# numbers (a contact's own typical_check_size, populated manually e.g. via
+# Crunchbase, or the firm's vertical_focus) whenever those exist.
+_STAGE_CHECK_SIZE_PROXY: dict[str, float] = {
+    "Pre-Seed": 300_000,
+    "Seed": 1_500_000,
+    "Series A": 8_000_000,
+    "Series B": 20_000_000,
+    "Series C+": 40_000_000,
+    "Growth": 75_000_000,
+}
+
 
 def recency_weight(year: int | None) -> float:
     """Exponential decay by year_partnered, so a fund that used to do seed but
@@ -209,14 +224,25 @@ class ContactFeatureEncoder:
 
     @staticmethod
     def typical_check_size(contact: dict) -> float | None:
-        """Individuals don't have their own check-size data -- always inherited
-        from the firm."""
+        """Priority: the contact's own manually-researched check size (e.g. entered
+        after looking them up on Crunchbase) -> their firm's vertical_focus average
+        -> a stage-based industry proxy derived from the contact's own stage
+        distribution, since most firms don't publish real check-size data at all."""
+        if contact.get("typical_check_size"):
+            return contact["typical_check_size"]
+
         sizes = [
             vf["typical_check_size"]
             for vf in (contact.get("org_vertical_focus") or [])
             if vf.get("typical_check_size")
         ]
-        return sum(sizes) / len(sizes) if sizes else None
+        if sizes:
+            return sum(sizes) / len(sizes)
+
+        distribution = ContactFeatureEncoder.stage_distribution(contact)
+        if not distribution:
+            return None
+        return sum(weight * _STAGE_CHECK_SIZE_PROXY.get(stage, 0.0) for stage, weight in distribution.items())
 
     def text_similarity(self, contact_index: int, startup_description: str) -> float:
         """Cosine similarity between a startup's description and this contact's

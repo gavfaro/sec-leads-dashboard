@@ -1,5 +1,7 @@
 "use client";
 
+import { useState } from "react";
+
 export interface Company {
   id: string;
   name: string;
@@ -122,6 +124,11 @@ export function PartnerModal({
     .map((ci) => oneCompany(ci.companies))
     .filter(Boolean) as Company[];
 
+  const [selectedCompany, setSelectedCompany] = useState<{
+    company: Company;
+    relationship: string;
+  } | null>(null);
+
   return (
     <Overlay onClose={onClose}>
       <ModalHeader
@@ -172,13 +179,13 @@ export function PartnerModal({
             </div>
             <div className="flex flex-wrap gap-1.5">
               {current.map((co) => (
-                <span
+                <button
                   key={co.id}
-                  title={co.description ?? undefined}
-                  className="text-[10px] font-bold border border-black px-2 py-0.5 bg-white"
+                  onClick={() => setSelectedCompany({ company: co, relationship: "current" })}
+                  className="text-[10px] font-bold border border-black px-2 py-0.5 bg-white hover:bg-[#10B981]/20 transition-none"
                 >
                   {co.name}
-                </span>
+                </button>
               ))}
             </div>
           </div>
@@ -195,18 +202,26 @@ export function PartnerModal({
             </div>
             <div className="flex flex-wrap gap-1.5">
               {previous.map((co) => (
-                <span
+                <button
                   key={co.id}
-                  title={co.description ?? undefined}
-                  className="text-[10px] font-bold border border-zinc-300 px-2 py-0.5 bg-zinc-50 text-zinc-500"
+                  onClick={() => setSelectedCompany({ company: co, relationship: "previous" })}
+                  className="text-[10px] font-bold border border-zinc-300 px-2 py-0.5 bg-zinc-50 text-zinc-500 hover:bg-zinc-200 transition-none"
                 >
                   {co.name}
-                </span>
+                </button>
               ))}
             </div>
           </div>
         )}
       </div>
+
+      {selectedCompany && (
+        <CompanyModal
+          company={selectedCompany.company}
+          relationship={selectedCompany.relationship}
+          onClose={() => setSelectedCompany(null)}
+        />
+      )}
     </Overlay>
   );
 }
