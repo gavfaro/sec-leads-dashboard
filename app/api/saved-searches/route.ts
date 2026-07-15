@@ -1,12 +1,16 @@
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.NEXT_PUBLIC_SUPABASE_URL!,
-  process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
-);
+import { createClient } from "@/lib/supabase/server";
 
 export async function GET() {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
   const { data, error } = await supabase
     .from("saved_searches")
     .select("id, search_name, filters, created_at")
@@ -19,6 +23,15 @@ export async function GET() {
 }
 
 export async function POST(req: Request) {
+  const supabase = await createClient();
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
   const body = await req.json().catch(() => null);
   const name = typeof body?.name === "string" ? body.name.trim() : "";
   const filters =
@@ -33,7 +46,7 @@ export async function POST(req: Request) {
 
   const { data, error } = await supabase
     .from("saved_searches")
-    .insert({ search_name: name, filters })
+    .insert({ search_name: name, filters, user_id: user.id })
     .select("id, search_name, filters, created_at")
     .single();
 
