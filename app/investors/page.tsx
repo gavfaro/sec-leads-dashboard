@@ -1,6 +1,8 @@
 import { createClient } from "@supabase/supabase-js";
 import InvestorExplorer, { OrgRow, PartnerRow } from "../components/InvestorExplorer";
 
+export const dynamic = "force-dynamic";
+
 // Service role key required — RLS blocks anon key on organizations/contacts reads.
 function getServiceClient() {
   return createClient(

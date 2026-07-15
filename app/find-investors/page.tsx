@@ -3,6 +3,8 @@ import FindInvestorsHub from "../components/FindInvestorsHub";
 import { CompanyEntry } from "../components/FindInvestors";
 import { MatchRunEntry } from "../components/MatchingEngine";
 
+export const dynamic = "force-dynamic";
+
 function getServiceClient() {
   return createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL!,
