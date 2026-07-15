@@ -59,7 +59,7 @@ export default async function CompanyProfile({ params }: ProfileProps) {
   }
 
   // 2. Fetch filing history and AI profile using the permanent company CIK
-  const [filingHistoryRes, aiProfileRes] = await Promise.all([
+  const [filingHistoryRes, aiProfileRes, discoveredInvestorsRes] = await Promise.all([
     supabase
       .from("company_fundraising_profiles")
       .select(
@@ -72,10 +72,20 @@ export default async function CompanyProfile({ params }: ProfileProps) {
       .select("*")
       .eq("cik", issuer.CIK)
       .maybeSingle(),
+    supabase
+      .from("discovered_investors")
+      .select("*")
+      .eq("cik", issuer.CIK),
   ]);
 
   const filingHistory = filingHistoryRes.data;
   const aiProfile = aiProfileRes.data;
+
+  const CONFIDENCE_RANK: Record<string, number> = { high: 0, medium: 1, low: 2 };
+  const discoveredInvestors = (discoveredInvestorsRes.data || []).sort(
+    (a: any, b: any) =>
+      (CONFIDENCE_RANK[a.confidence] ?? 3) - (CONFIDENCE_RANK[b.confidence] ?? 3),
+  );
 
   return (
     <div className="max-w-5xl mx-auto p-4 font-sans text-black pb-24">
@@ -135,12 +145,25 @@ export default async function CompanyProfile({ params }: ProfileProps) {
         {/* NEW: AI Agent Intelligence Card */}
         <AiEnrichCard
           cik={issuer.CIK}
+          accessionNumber={accessionNumber}
           companyName={issuer.ENTITYNAME}
           address={`${issuer.STREET1}, ${issuer.CITY}, ${issuer.STATEORCOUNTRY}`}
           signer={submission?.FILING_DATE}
           executives={relatedPersons
             .map((p: any) => `${p.FIRSTNAME} ${p.LASTNAME}`)
             .join(", ")}
+          relatedPersons={relatedPersons.map((p: any) => ({
+            name: `${p.FIRSTNAME} ${p.LASTNAME}`.trim(),
+            relationships: [
+              p.RELATIONSHIP_1,
+              p.RELATIONSHIP_2,
+              p.RELATIONSHIP_3,
+            ].filter(Boolean),
+          }))}
+          industry={offering?.INDUSTRYGROUPTYPE}
+          dateOfFirstSale={offering?.SALE_DATE}
+          targetRaise={offering?.TOTALOFFERINGAMOUNT}
+          amountSold={offering?.TOTALAMOUNTSOLD}
           existingProfile={aiProfile}
         />
 
@@ -263,6 +286,88 @@ export default async function CompanyProfile({ params }: ProfileProps) {
                 {Number(offering?.SALESCOMM_DOLLARAMOUNT || 0).toLocaleString()}
               </span>
             </div>
+          </div>
+        </section>
+
+        {/* Section 2.5: Discovered Investors */}
+        <section className="border-2 border-black bg-white">
+          <div className="bg-zinc-100 p-2 border-b-2 border-black font-black uppercase text-xs tracking-wide flex justify-between">
+            <span>Discovered Investors</span>
+            <span>{discoveredInvestors.length} Found</span>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-left text-sm border-collapse">
+              <thead>
+                <tr className="bg-zinc-50 border-b-2 border-black text-[10px] font-black uppercase tracking-wider text-black">
+                  <th className="p-3 border-r-2 border-black">Investor</th>
+                  <th className="p-3 border-r-2 border-black">Type</th>
+                  <th className="p-3 border-r-2 border-black">Role</th>
+                  <th className="p-3 border-r-2 border-black">Confidence</th>
+                  <th className="p-3 border-r-2 border-black">Method</th>
+                  <th className="p-3">Evidence</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y-2 divide-black font-bold">
+                {discoveredInvestors.length > 0 ? (
+                  discoveredInvestors.map((inv: any) => (
+                    <tr key={inv.id} className="text-black align-top">
+                      <td className="p-3 border-r-2 border-black font-black uppercase">
+                        {inv.investor_name}
+                      </td>
+                      <td className="p-3 border-r-2 border-black text-xs uppercase">
+                        {inv.investor_type || "Unknown"}
+                      </td>
+                      <td className="p-3 border-r-2 border-black text-xs uppercase">
+                        {inv.role || "Unknown"}
+                      </td>
+                      <td className="p-3 border-r-2 border-black text-xs">
+                        <span
+                          className={`px-2 py-0.5 border-2 border-black uppercase font-bold text-[10px] ${
+                            inv.confidence === "high"
+                              ? "bg-[#10B981]"
+                              : inv.confidence === "medium"
+                                ? "bg-zinc-200"
+                                : "bg-white"
+                          }`}
+                        >
+                          {inv.confidence || "low"}
+                        </span>
+                      </td>
+                      <td className="p-3 border-r-2 border-black text-xs uppercase">
+                        {inv.discovery_method === "board_seat_hack"
+                          ? "Board Seat"
+                          : "Smart Search"}
+                      </td>
+                      <td className="p-3 text-xs font-normal">
+                        {inv.evidence && (
+                          <p className="text-zinc-600 mb-1">{inv.evidence}</p>
+                        )}
+                        {inv.source_url && (
+                          <a
+                            href={inv.source_url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="underline text-[#10B981] break-all"
+                          >
+                            {inv.source_url}
+                          </a>
+                        )}
+                      </td>
+                    </tr>
+                  ))
+                ) : (
+                  <tr>
+                    <td
+                      colSpan={6}
+                      className="p-6 text-center font-black text-zinc-500 uppercase text-sm"
+                    >
+                      No investors discovered yet for this company. This section
+                      populates automatically once the daily investor search runs.
+                    </td>
+                  </tr>
+                )}
+              </tbody>
+            </table>
           </div>
         </section>
 

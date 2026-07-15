@@ -196,9 +196,7 @@ export default async function SECDashboard({ searchParams }: PageProps) {
           <h1 className="text-3xl font-black tracking-tight uppercase">
             Intelligence Dashboard
           </h1>
-          <p className="text-base font-bold mt-1 text-white">
-            Mark Zuckerberg's Computer
-          </p>
+          <p className="text-base font-bold mt-1 text-white">My Computer</p>
         </div>
         <div className="text-sm font-bold bg-[#10B981] px-4 py-2 border-2 border-black uppercase tracking-wide">
           Results: {count || 0}

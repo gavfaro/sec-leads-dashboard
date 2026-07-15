@@ -5,10 +5,16 @@ import { useRouter } from "next/navigation";
 
 export default function AiEnrichCard({
   cik,
+  accessionNumber,
   companyName,
   address,
   signer,
   executives,
+  relatedPersons,
+  industry,
+  dateOfFirstSale,
+  targetRaise,
+  amountSold,
   existingProfile,
 }: any) {
   const [loading, setLoading] = useState(false);
@@ -20,7 +26,19 @@ export default function AiEnrichCard({
       const res = await fetch("/api/enrich", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ cik, companyName, address, signer, executives }),
+        body: JSON.stringify({
+          cik,
+          accessionNumber,
+          companyName,
+          address,
+          signer,
+          executives,
+          relatedPersons,
+          industry,
+          dateOfFirstSale,
+          targetRaise,
+          amountSold,
+        }),
       });
       if (res.ok) {
         // Refresh the page data to show the newly saved Supabase profile
@@ -78,6 +96,37 @@ export default function AiEnrichCard({
               {existingProfile.ai_summary}
             </div>
           </div>
+          {(existingProfile.round_stage ||
+            existingProfile.round_amount ||
+            existingProfile.round_summary) && (
+            <div className="border-t-2 border-black pt-4 mt-4">
+              <span className="font-black uppercase text-[10px] text-zinc-500 block mb-2">
+                Funding Round Signal (Claude Web Search)
+              </span>
+              <div className="flex flex-wrap gap-2 mb-2">
+                {existingProfile.round_stage && (
+                  <span className="px-2 py-0.5 border-2 border-black uppercase font-bold text-[10px] bg-white">
+                    {existingProfile.round_stage}
+                  </span>
+                )}
+                {existingProfile.round_amount && (
+                  <span className="px-2 py-0.5 border-2 border-black uppercase font-bold text-[10px] bg-white">
+                    {existingProfile.round_amount}
+                  </span>
+                )}
+                {existingProfile.round_date && (
+                  <span className="px-2 py-0.5 border-2 border-black uppercase font-bold text-[10px] bg-white">
+                    {existingProfile.round_date}
+                  </span>
+                )}
+              </div>
+              {existingProfile.round_summary && (
+                <p className="font-mono text-xs leading-relaxed font-medium bg-zinc-50 p-4 border-2 border-black">
+                  {existingProfile.round_summary}
+                </p>
+              )}
+            </div>
+          )}
         </div>
       </section>
     );
