@@ -3,6 +3,7 @@ import FindInvestorsHub from "../components/FindInvestorsHub";
 import { CompanyEntry } from "../components/FindInvestors";
 import { MatchRunEntry } from "../components/MatchingEngine";
 import { MATCH_RESULT_SELECT, shapeMatchResultRow, shapeMatchRun } from "@/lib/matchRuns";
+import { createClient as createSessionClient } from "@/lib/supabase/server";
 
 export const dynamic = "force-dynamic";
 
@@ -15,6 +16,11 @@ function getServiceClient() {
 
 export default async function FindInvestorsPage() {
   const sb = getServiceClient();
+  // Saved matches are per-account: read through the session client so the
+  // select_own_match_runs / select_own_match_results RLS policies scope these two
+  // queries automatically, same pattern as saved_searches. Shared investor/company
+  // data below stays on the service-role client -- it isn't user-owned.
+  const sbSession = await createSessionClient();
 
   const [ciRes, contactsRes, orgsRes, companiesRes, verticalsRes, matchRunsRes, matchResultsRes] =
     await Promise.all([
@@ -27,11 +33,11 @@ export default async function FindInvestorsPage() {
       sb.from("organizations").select("id, name"),
       sb.from("companies").select("id, name, description"),
       sb.from("verticals").select("vertical_name").order("vertical_name"),
-      sb
+      sbSession
         .from("match_runs")
         .select("id, startup_name, startup_input, created_at")
         .order("created_at", { ascending: false }),
-      sb.from("match_results").select(MATCH_RESULT_SELECT).order("rank"),
+      sbSession.from("match_results").select(MATCH_RESULT_SELECT).order("rank"),
     ]);
 
   const contactMap = new Map(

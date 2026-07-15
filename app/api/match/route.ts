@@ -4,6 +4,7 @@ import { promisify } from "util";
 import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { fetchMatchRun } from "@/lib/matchRuns";
+import { createClient as createSessionClient } from "@/lib/supabase/server";
 
 const execFileAsync = promisify(execFile);
 
@@ -30,6 +31,14 @@ interface MatchRequestBody {
 }
 
 export async function POST(req: NextRequest) {
+  const sessionClient = await createSessionClient();
+  const {
+    data: { user },
+  } = await sessionClient.auth.getUser();
+  if (!user) {
+    return NextResponse.json({ error: "Not authenticated" }, { status: 401 });
+  }
+
   let body: MatchRequestBody;
   try {
     body = await req.json();
@@ -85,6 +94,22 @@ export async function POST(req: NextRequest) {
   }
 
   const sb = getServiceClient();
+
+  // matcher.py inserts via the service-role key (it has no notion of web sessions),
+  // so ownership is stamped on here. There's no UPDATE RLS policy on match_runs --
+  // an unowned row can't be claimed through the user's own session client -- so
+  // this specific step has to use the service-role client.
+  const { error: ownerError } = await sb
+    .from("match_runs")
+    .update({ user_id: user.id })
+    .eq("id", matchRunId);
+  if (ownerError) {
+    return NextResponse.json(
+      { error: "Match run was created but could not be assigned to your account.", detail: ownerError.message },
+      { status: 500 },
+    );
+  }
+
   const run = await fetchMatchRun(sb, matchRunId);
   if (!run) {
     return NextResponse.json(
