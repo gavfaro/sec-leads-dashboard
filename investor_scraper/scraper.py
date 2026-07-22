@@ -1,4 +1,5 @@
 import io
+import json as _json
 import logging
 import os
 import re
@@ -776,6 +777,322 @@ def scrape_accel_team(sb: Client, dry_run: bool = False, limit: int | None = Non
             log.exception("Failed writing %r, skipping", p.get("name"))
 
 
+# ---------------------------------------------------------------------------
+# Y Combinator — partners + companies directory
+# ---------------------------------------------------------------------------
+
+def _fetch_yc(url: str) -> str:
+    """Fetch a YC page with networkidle wait and stealth."""
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        ctx = browser.new_context(user_agent=USER_AGENT, viewport={"width": 1440, "height": 900})
+        page = ctx.new_page()
+        page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        page.goto(url, wait_until="networkidle", timeout=60000)
+        page.wait_for_timeout(2000)
+        html = page.content()
+        ctx.close()
+        browser.close()
+    return html
+
+
+def _parse_yc_partners_listing(html: str) -> list[str]:
+    """Return absolute profile URLs from the /partners grid."""
+    soup = BeautifulSoup(html, "html.parser")
+    container = soup.find(class_="partners-grid-container")
+    if not container:
+        log.warning("_parse_yc_partners_listing: partners-grid-container not found")
+        return []
+    seen: set[str] = set()
+    urls: list[str] = []
+    for a in container.find_all("a", href=True):
+        href = a["href"]
+        if "/people/" in href and href not in seen:
+            seen.add(href)
+            urls.append("https://www.ycombinator.com" + href)
+    return urls
+
+
+def _parse_yc_partner_profile(html: str) -> dict | None:
+    """
+    Extract partner data from the JSON blob embedded in data-page on profile pages.
+
+    YC partner profiles embed everything in:
+      <div id="PartnerPage-react-component-..." data-page="{...}">
+
+    Returns: {name, bio, twitter, linkedin, companies: [{name, url}]}
+    """
+    soup = BeautifulSoup(html, "html.parser")
+    for div in soup.find_all("div", attrs={"data-page": True}):
+        raw = div.get("data-page", "")
+        if not raw:
+            continue
+        try:
+            data = _json.loads(raw)
+        except _json.JSONDecodeError:
+            continue
+        if data.get("component") == "PartnerPage":
+            partner = data.get("props", {}).get("partner", {})
+            return {
+                "name": partner.get("name"),
+                "bio": partner.get("bio"),
+                "twitter": partner.get("twitter_handle"),
+                "linkedin": partner.get("linkedin_handle"),
+                "companies": [
+                    {"name": c["name"], "url": (c.get("url") or "").strip()}
+                    for c in partner.get("companies", [])
+                    if c.get("name")
+                ],
+            }
+    return None
+
+
+def _get_yc_algolia_creds() -> tuple[str, str, str]:
+    """
+    Open the YC companies page and intercept the Algolia API request.
+
+    YC passes credentials as URL query params (x-algolia-application-id,
+    x-algolia-api-key), not in request headers. The index name comes from
+    the POST body's indexName field.
+    """
+    import urllib.parse as _uparse
+    creds: dict[str, str] = {}
+
+    def on_request(request):
+        if "algolia.net" in request.url and "algolia-application-id" in request.url and "app_id" not in creds:
+            parsed = _uparse.urlparse(request.url)
+            params = _uparse.parse_qs(parsed.query)
+            app_id = (params.get("x-algolia-application-id") or [""])[0]
+            api_key = (params.get("x-algolia-api-key") or [""])[0]
+            if app_id and api_key:
+                creds["app_id"] = app_id
+                creds["api_key"] = api_key
+                # Extract index name from POST body JSON
+                try:
+                    body = _json.loads(request.post_data or "{}")
+                    idx = body.get("requests", [{}])[0].get("indexName", "YCCompany_production")
+                    creds["index"] = idx
+                except Exception:
+                    creds["index"] = "YCCompany_production"
+
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        ctx = browser.new_context(user_agent=USER_AGENT, viewport={"width": 1440, "height": 900})
+        page = ctx.new_page()
+        page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        page.on("request", on_request)
+        page.goto("https://www.ycombinator.com/companies", wait_until="networkidle", timeout=60000)
+        page.wait_for_timeout(3000)
+        ctx.close()
+        browser.close()
+
+    if "app_id" not in creds:
+        raise RuntimeError("Could not capture Algolia credentials from YC companies page")
+    log.info("Algolia: app_id=%s index=%s", creds["app_id"], creds["index"])
+    return creds["app_id"], creds["api_key"], creds["index"]
+
+
+def _query_yc_algolia(app_id: str, api_key: str, index: str, page_num: int = 0) -> dict:
+    """
+    Query a single page of YC companies from Algolia.
+
+    YC uses the multi-index endpoint (/indexes/*/queries) with credentials
+    as URL query params and the index name in the POST body.
+    """
+    import urllib.parse as _uparse
+    params = _uparse.urlencode({
+        "x-algolia-agent": "Algolia for JavaScript (3.35.1); Browser",
+        "x-algolia-application-id": app_id,
+        "x-algolia-api-key": api_key,
+    })
+    url = f"https://{app_id.lower()}-dsn.algolia.net/1/indexes/*/queries?{params}"
+    inner_params = _uparse.urlencode({
+        "query": "",
+        "page": page_num,
+        "hitsPerPage": 1000,
+        "tagFilters": "",
+    })
+    payload = _json.dumps({
+        "requests": [{"indexName": index, "params": inner_params}]
+    }).encode()
+    req = urllib.request.Request(
+        url,
+        data=payload,
+        headers={
+            "User-Agent": USER_AGENT,
+            "Content-Type": "application/x-www-form-urlencoded",
+            "Accept": "application/json",
+        },
+    )
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        multi = _json.loads(resp.read())
+    return multi.get("results", [{}])[0]
+
+
+def _batch_to_year(batch: str | None) -> int | None:
+    """Convert YC batch code (W24, S23, IK) to a 4-digit year, or None."""
+    if not batch:
+        return None
+    m = re.search(r"(\d{2,4})", batch)
+    if not m:
+        return None
+    year = int(m.group(1))
+    if year < 100:
+        year += 2000
+    return year if 2005 <= year <= 2030 else None
+
+
+def scrape_yc_partners(sb: Client, dry_run: bool = False, limit: int | None = None) -> None:
+    """
+    Scrape YC /partners page and each partner's profile.
+
+    Phase 1 — fetch /partners grid → collect /people/<slug> URLs
+    Phase 2 — fetch each profile → parse embedded JSON blob
+    Phase 3 — write YC org, contacts (partners), companies, contact_investments,
+               portfolio_investments to DB
+    """
+    org_name = "Y Combinator"
+    org_website = "https://www.ycombinator.com"
+    entity_type = "Accelerator"
+
+    log.info("Fetching YC partners listing")
+    html = _fetch_yc("https://www.ycombinator.com/partners")
+    profile_urls = _parse_yc_partners_listing(html)
+    log.info("Found %d partner profiles", len(profile_urls))
+
+    if limit:
+        profile_urls = profile_urls[:limit]
+
+    all_profiles: list[dict] = []
+    for i, url in enumerate(profile_urls):
+        log.info("[%d/%d] Fetching profile %s", i + 1, len(profile_urls), url)
+        try:
+            html = _fetch_yc(url)
+            profile = _parse_yc_partner_profile(html)
+            if profile:
+                all_profiles.append(profile)
+                log.info("  %s | %d companies", profile.get("name"), len(profile.get("companies", [])))
+            else:
+                log.warning("  Could not parse profile JSON at %s", url)
+        except Exception:
+            log.exception("  Failed to fetch %s", url)
+        time.sleep(CRAWL_DELAY_SECONDS)
+
+    if dry_run:
+        log.info("[DRY-RUN] Would write %d YC partners to DB", len(all_profiles))
+        for p in all_profiles:
+            log.info("  %s | bio=%s | twitter=%s | linkedin=%s | %d companies",
+                     p.get("name"), bool(p.get("bio")), bool(p.get("twitter")),
+                     bool(p.get("linkedin")), len(p.get("companies", [])))
+        return
+
+    org_id = get_or_create_organization(sb, org_name, entity_type, org_website)
+
+    for profile in all_profiles:
+        try:
+            name = profile.get("name", "")
+            contact_id = get_or_create_contact(sb, org_id, name)
+            update_contact_profile(
+                sb, contact_id,
+                bio=profile.get("bio"),
+                email=None,
+                role="Partner",
+                linkedin_url=(
+                    f"https://linkedin.com/in/{profile['linkedin']}"
+                    if profile.get("linkedin") else None
+                ),
+                other_sites=(
+                    {"twitter": f"https://twitter.com/{profile['twitter']}"}
+                    if profile.get("twitter") else None
+                ),
+            )
+            for co in profile.get("companies", []):
+                co_name = co["name"].strip()
+                co_url = co["url"] or None
+                if not co_name:
+                    continue
+                company_id = upsert_company(sb, co_name, co_url, None)
+                get_or_create_contact_investment(sb, contact_id, company_id, "current", None)
+                get_or_create_portfolio_investment(sb, org_id, company_id, None)
+            log.info("Wrote %s: %d companies", name, len(profile.get("companies", [])))
+        except Exception:
+            log.exception("Failed writing partner %r, skipping", profile.get("name"))
+
+
+def scrape_yc_companies(sb: Client, dry_run: bool = False, limit: int | None = None) -> None:
+    """
+    Scrape the full YC company directory via Algolia API.
+
+    Phase 1 — open /companies with Playwright to capture Algolia credentials
+    Phase 2 — paginate Algolia (no crawl delay needed — it's their own search API)
+    Phase 3 — upsert companies, portfolio_investments, vertical_focus for YC
+    """
+    org_name = "Y Combinator"
+    org_website = "https://www.ycombinator.com"
+    entity_type = "Accelerator"
+
+    log.info("Capturing Algolia credentials from YC companies page")
+    app_id, api_key, index = _get_yc_algolia_creds()
+
+    log.info("Fetching all YC companies from Algolia index=%s", index)
+    all_hits: list[dict] = []
+    page_num = 0
+    while True:
+        result = _query_yc_algolia(app_id, api_key, index, page_num)
+        hits = result.get("hits", [])
+        nb_pages = result.get("nbPages", 1)
+        all_hits.extend(hits)
+        log.info("  Page %d/%d: %d hits (total so far: %d)", page_num + 1, nb_pages, len(hits), len(all_hits))
+        if page_num >= nb_pages - 1:
+            break
+        page_num += 1
+
+    log.info("Total YC companies from Algolia: %d", len(all_hits))
+
+    if limit:
+        all_hits = all_hits[:limit]
+        log.info("Limited to %d for this run", len(all_hits))
+
+    if dry_run:
+        log.info("[DRY-RUN] Would write %d YC companies to DB", len(all_hits))
+        for h in all_hits[:5]:
+            log.info("  %r batch=%r tags=%r website=%r",
+                     h.get("name"), h.get("batch"), (h.get("tags") or [])[:3], h.get("website"))
+        return
+
+    org_id = get_or_create_organization(sb, org_name, entity_type, org_website)
+
+    inserted = skipped = 0
+    for i, hit in enumerate(all_hits):
+        try:
+            name = (hit.get("name") or "").strip()
+            if not name:
+                skipped += 1
+                continue
+
+            description = (hit.get("one_liner") or "").strip() or None
+            website = (hit.get("website") or "").strip() or None
+            batch = (hit.get("batch") or "").strip() or None
+            tags: list[str] = [t for t in (hit.get("tags") or []) if t]
+            year = _batch_to_year(batch)
+
+            company_id = upsert_company(sb, name, website, description)
+            get_or_create_portfolio_investment(sb, org_id, company_id, None, year)
+
+            for tag in tags:
+                vertical_id = get_or_create_vertical(sb, tag.strip())
+                get_or_create_vertical_focus(sb, org_id, vertical_id)
+
+            inserted += 1
+            if (i + 1) % 100 == 0:
+                log.info("  Progress: %d/%d companies written", i + 1, len(all_hits))
+        except Exception:
+            log.exception("  Failed for %r, skipping", hit.get("name"))
+            skipped += 1
+
+    log.info("YC companies done: %d written, %d skipped", inserted, skipped)
+
+
 FIRM_REGISTRY = {
     "greylock": {
         "name": "Greylock",
@@ -1220,6 +1537,11 @@ TEAM_SCRAPERS = {
     "greylock": scrape_greylock_team,
     "sequoia": scrape_sequoia_team,
     "accel": scrape_accel_team,
+    "yc": scrape_yc_partners,
+}
+
+COMPANIES_SCRAPERS = {
+    "yc": scrape_yc_companies,
 }
 
 
@@ -1253,6 +1575,15 @@ def main() -> None:
                 log.error("No team scraper for %r. Available: %s", firm_key, list(TEAM_SCRAPERS.keys()))
                 continue
             TEAM_SCRAPERS[firm_key](sb, dry_run=dry_run, limit=limit)
+        return
+
+    if positional and positional[0] == "companies":
+        firm_keys = positional[1:] or list(COMPANIES_SCRAPERS.keys())
+        for firm_key in firm_keys:
+            if firm_key not in COMPANIES_SCRAPERS:
+                log.error("No companies scraper for %r. Available: %s", firm_key, list(COMPANIES_SCRAPERS.keys()))
+                continue
+            COMPANIES_SCRAPERS[firm_key](sb, dry_run=dry_run, limit=limit)
         return
 
     firm_keys = positional or list(FIRM_REGISTRY.keys())
