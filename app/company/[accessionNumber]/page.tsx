@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import AiEnrichCard from "../../components/AIEnrichCard";
+import ExportProfileButtons from "../../components/ExportProfileButtons";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -95,16 +96,76 @@ export default async function CompanyProfile({ params }: ProfileProps) {
       (CONFIDENCE_RANK[a.confidence] ?? 3) - (CONFIDENCE_RANK[b.confidence] ?? 3),
   );
 
+  const exportData = {
+    companyName: issuer.ENTITYNAME,
+    accessionNumber,
+    profileFields: [
+      ["Entity Name", issuer.ENTITYNAME],
+      ["Previous Name", issuer.ISSUER_PREVIOUSNAME_1],
+      ["CIK", issuer.CIK],
+      ["Accession Number", accessionNumber],
+      ["Filing Date", submission?.FILING_DATE],
+      ["Industry", offering?.INDUSTRYGROUPTYPE],
+      ["Entity Type", issuer.ENTITYTYPE],
+      ["Street Address", issuer.STREET1],
+      ["Street Address 2", issuer.STREET2],
+      ["City", issuer.CITY],
+      ["State/Country", issuer.STATEORCOUNTRY],
+      ["Zip Code", issuer.ZIPCODE],
+      ["Phone Number", issuer.ISSUERPHONENUMBER],
+      ["Jurisdiction of Incorporation", issuer.JURISDICTIONOFINC],
+      ["Year of Incorporation", issuer.YEAROFINC_VALUE_ENTERED],
+      ["SIC Code", submission?.SIC_CODE],
+      ["Revenue Range", offering?.REVENUERANGE],
+    ] as [string, string | number | null | undefined][],
+    offeringFields: [
+      ["Total Target Raise", formatOfferingAmount(offering?.TOTALOFFERINGAMOUNT)],
+      ["Total Amount Sold", offering?.TOTALAMOUNTSOLD],
+      ["Total Remaining", formatOfferingAmount(offering?.TOTALREMAINING)],
+      ["Minimum Investment", offering?.MINIMUMINVESTMENTACCEPTED],
+      ["Federal Exemption", offering?.FEDERALEXEMPTIONS_ITEMS_LIST],
+      ["Total Investors", offering?.TOTALNUMBERALREADYINVESTED],
+      ["Has Non-Accredited Investors", offering?.HASNONACCREDITEDINVESTORS ? "Yes" : "No"],
+      ["Gross Proceeds Used", offering?.GROSSPROCEEDSUSED_DOLLARAMOUNT],
+      ["Sales Commissions", offering?.SALESCOMM_DOLLARAMOUNT],
+    ] as [string, string | number | null | undefined][],
+    relatedPersonsRows: relatedPersons.map((p: any) => [
+      `${p.FIRSTNAME} ${p.MIDDLENAME ? p.MIDDLENAME + " " : ""}${p.LASTNAME}`.trim(),
+      [p.RELATIONSHIP_1, p.RELATIONSHIP_2, p.RELATIONSHIP_3]
+        .filter(Boolean)
+        .join("; "),
+      p.CITY,
+      p.STATEORCOUNTRY,
+    ]),
+    discoveredInvestorsRows: discoveredInvestors.map((inv: any) => [
+      inv.investor_name,
+      inv.investor_type,
+      inv.role,
+      inv.confidence,
+      inv.discovery_method === "board_seat_hack" ? "Board Seat" : "Smart Search",
+      inv.evidence,
+      inv.source_url,
+    ]),
+    filingHistoryRows: (filingHistory || []).map((h: any) => [
+      h.filing_date,
+      h.submission_type === "D/A" ? "D/A (Amendment)" : "D (New Notice)",
+      h.target_raise,
+      h.amount_sold,
+      h.ACCESSIONNUMBER,
+    ]),
+  };
+
   return (
     <div className="max-w-5xl mx-auto p-4 font-sans text-black pb-24">
       {/* Back Nav Header */}
-      <nav className="mb-6">
+      <nav className="mb-6 flex items-center justify-between">
         <Link
           href="/"
           className="inline-block px-4 py-2 border-2 border-black font-bold uppercase text-xs tracking-wider bg-white hover:bg-[#2596BE] transition-none"
         >
           ← Back to Lead Engine
         </Link>
+        <ExportProfileButtons data={exportData} />
       </nav>
 
       {/* Profile Header Block */}
