@@ -14,7 +14,7 @@ function getServiceClient() {
 export default async function InvestorsPage() {
   const sb = getServiceClient();
 
-  const [orgsRes, contactsRes, investmentsRes] = await Promise.all([
+  const [orgsRes, contactsRes] = await Promise.all([
     sb
       .from("organizations")
       .select("id, name, website, entity_types(type_name)")
@@ -26,7 +26,6 @@ export default async function InvestorsPage() {
          contact_investments(relationship, companies(id, name, description))`,
       )
       .order("last_name"),
-    sb.from("portfolio_investments").select("org_id, company_id"),
   ]);
 
   if (orgsRes.error) {
@@ -40,6 +39,20 @@ export default async function InvestorsPage() {
   const rawOrgs = orgsRes.data ?? [];
   const rawContacts = (contactsRes.data ?? []) as any[];
 
+  // One HEAD count query per org — avoids PostgREST max_rows cap on row-returning queries
+  const companyCounts = await Promise.all(
+    rawOrgs.map((org) =>
+      sb
+        .from("portfolio_investments")
+        .select("company_id", { count: "exact", head: true })
+        .eq("org_id", org.id)
+        .then((res) => ({ orgId: org.id, count: res.count ?? 0 })),
+    ),
+  );
+  const companyCountMap: Record<string, number> = Object.fromEntries(
+    companyCounts.map(({ orgId, count }) => [orgId, count]),
+  );
+
   const orgMap: Record<string, string> = Object.fromEntries(
     rawOrgs.map((o) => [o.id, o.name]),
   );
@@ -48,13 +61,6 @@ export default async function InvestorsPage() {
   const partnerCounts: Record<string, number> = {};
   for (const c of rawContacts) {
     partnerCounts[c.org_id] = (partnerCounts[c.org_id] ?? 0) + 1;
-  }
-
-  // Distinct portfolio companies per org
-  const companyCountMap: Record<string, Set<string>> = {};
-  for (const pi of investmentsRes.data ?? []) {
-    if (!companyCountMap[pi.org_id]) companyCountMap[pi.org_id] = new Set();
-    companyCountMap[pi.org_id].add(pi.company_id);
   }
 
   function pickCompany(c: any) {
@@ -70,7 +76,7 @@ export default async function InvestorsPage() {
       ? (org.entity_types[0]?.type_name ?? null)
       : (org.entity_types?.type_name ?? null),
     partnerCount: partnerCounts[org.id] ?? 0,
-    companyCount: companyCountMap[org.id]?.size ?? 0,
+    companyCount: companyCountMap[org.id] ?? 0,
   }));
 
   const partners: PartnerRow[] = rawContacts.map((c: any) => {
@@ -100,9 +106,7 @@ export default async function InvestorsPage() {
   });
 
   const totalPartners = rawContacts.length;
-  const totalCompanies = new Set(
-    (investmentsRes.data ?? []).map((pi) => pi.company_id),
-  ).size;
+  const totalCompanies = companyCounts.reduce((sum, { count }) => sum + count, 0);
 
   return (
     <div className="max-w-7xl mx-auto p-4 font-sans text-black pb-16">

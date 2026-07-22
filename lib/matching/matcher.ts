@@ -3,6 +3,8 @@ import type { SupabaseClient } from "@supabase/supabase-js";
 import { ContactFeatureEncoder } from "./encoder";
 import { fetchInvestorData } from "./dataPuller";
 import { distributionStageFit, normalizeStage } from "./stage";
+import { cosineSimilarity } from "./embeddings";
+import { getOrCreateEmbeddings, normalizeTag } from "./verticalEmbeddings";
 import type { Contact, ScoreBreakdown, ScoredResult, StartupInput } from "./types";
 
 // Weighted-sum fusion, not a learned attention mechanism -- there's no labeled
@@ -19,9 +21,66 @@ export const DEFAULT_WEIGHTS: Record<string, number> = {
 // for missing enrichment, and don't reward it either.
 const NEUTRAL_SCORE = 0.5;
 
-function verticalOverlap(startupVerticals: string[], contactWeights: Record<string, number>): number {
-  if (startupVerticals.length === 0 || Object.keys(contactWeights).length === 0) return NEUTRAL_SCORE;
-  return startupVerticals.reduce((sum, v) => sum + (contactWeights[v] ?? 0), 0);
+// Vertical fit is embedding-based rather than exact-string matching: the tag
+// vocabulary scraped across firms has grown into the hundreds of fragmented
+// spellings of the same concepts (Y Combinator alone has 280+ distinct tags --
+// "AIOps", "Generative AI", "Machine Learning", "ML" all mean roughly the same
+// thing), so a hand-maintained alias table stopped being viable. This reuses
+// encoder.verticalWeights()'s existing fallback chain (a contact's own tags -> their
+// firm's -> keyword-inferred from bio/portfolio text) entirely unchanged -- it just
+// swaps the final "does this tag exactly match a startup tag" comparison for
+// semantic similarity, weighted by how much each tag represents the contact
+// (encoder.verticalWeights()'s own distribution).
+async function computeVerticalFits(
+  sb: SupabaseClient,
+  startupVerticals: string[],
+  contacts: Contact[],
+  encoder: ContactFeatureEncoder,
+): Promise<Map<string, number>> {
+  const fits = new Map<string, number>();
+  if (startupVerticals.length === 0) {
+    for (const c of contacts) fits.set(c.id, NEUTRAL_SCORE);
+    return fits;
+  }
+
+  const contactWeightMaps = contacts.map((c) => encoder.verticalWeights(c));
+  const allTags = [...startupVerticals, ...contactWeightMaps.flatMap((m) => Object.keys(m))];
+
+  let embeddings: Map<string, number[]>;
+  try {
+    embeddings = await getOrCreateEmbeddings(sb, allTags);
+  } catch (err) {
+    // Degrade to neutral rather than failing the whole match if the embeddings
+    // API is unreachable or misconfigured -- vertical is one signal of four.
+    console.error("Vertical embedding lookup failed, falling back to neutral:", err);
+    for (const c of contacts) fits.set(c.id, NEUTRAL_SCORE);
+    return fits;
+  }
+
+  const startupVectors = startupVerticals
+    .map((t) => embeddings.get(normalizeTag(t)))
+    .filter((v): v is number[] => Boolean(v));
+
+  contacts.forEach((contact, i) => {
+    const tagWeights = Object.entries(contactWeightMaps[i]);
+    if (startupVectors.length === 0 || tagWeights.length === 0) {
+      fits.set(contact.id, NEUTRAL_SCORE);
+      return;
+    }
+
+    let weightedSum = 0;
+    let weightTotal = 0;
+    for (const [tag, weight] of tagWeights) {
+      const tagVec = embeddings.get(normalizeTag(tag));
+      if (!tagVec) continue;
+      const bestMatch = Math.max(...startupVectors.map((sv) => cosineSimilarity(sv, tagVec)));
+      weightedSum += weight * bestMatch;
+      weightTotal += weight;
+    }
+    fits.set(contact.id, weightTotal > 0 ? weightedSum / weightTotal : NEUTRAL_SCORE);
+  });
+
+  return fits;
 }
 
 function checkSizeFit(typicalCheckSize: number | null, targetRaise: number | null): number {
@@ -52,12 +111,13 @@ export function scoreStartupAgainstInvestors(
   startup: StartupInput,
   contacts: Contact[],
   weights: Record<string, number>,
+  encoder: ContactFeatureEncoder,
+  verticalFits: Map<string, number>,
 ): ScoredResult[] {
-  const encoder = new ContactFeatureEncoder(contacts);
   const normalizedStage = normalizeStage(startup.stage);
 
   const results: ScoredResult[] = contacts.map((contact, i) => {
-    const verticalScore = verticalOverlap(startup.verticals, encoder.verticalWeights(contact));
+    const verticalScore = verticalFits.get(contact.id) ?? NEUTRAL_SCORE;
     const stageScore = distributionStageFit(encoder.stageDistribution(contact), normalizedStage);
     const checkSizeScore = checkSizeFit(encoder.typicalCheckSize(contact), startup.targetRaise);
     const textScore = encoder.textSimilarity(i, startup.description);
@@ -102,7 +162,9 @@ export async function runMatch(
 ): Promise<{ matchRunId: string; results: ScoredResult[] }> {
   const weights = resolveWeights(weightOverrides);
   const contacts = await fetchInvestorData(sb);
-  const results = scoreStartupAgainstInvestors(startup, contacts, weights);
+  const encoder = new ContactFeatureEncoder(contacts);
+  const verticalFits = await computeVerticalFits(sb, startup.verticals, contacts, encoder);
+  const results = scoreStartupAgainstInvestors(startup, contacts, weights, encoder, verticalFits);
 
   const { data: runData, error: runError } = await sb
     .from("match_runs")

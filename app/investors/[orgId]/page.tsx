@@ -1,6 +1,7 @@
 import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import FirmContacts, { ContactWithInvestments } from "../../components/FirmContacts";
+import PortfolioSection, { PortfolioCompany } from "../../components/PortfolioSection";
 
 function getServiceClient() {
   return createClient(
@@ -9,15 +10,21 @@ function getServiceClient() {
   );
 }
 
+const PORTFOLIO_PAGE_SIZE = 200;
+
 interface PageProps {
   params: Promise<{ orgId: string }>;
+  searchParams: Promise<{ p?: string }>;
 }
 
-export default async function FirmDetailPage({ params }: PageProps) {
+export default async function FirmDetailPage({ params, searchParams }: PageProps) {
   const { orgId } = await params;
+  const { p } = await searchParams;
+  const portfolioPage = Math.max(0, (parseInt(p ?? "1", 10) || 1) - 1); // 0-indexed
+
   const sb = getServiceClient();
 
-  const [orgRes, contactsRes, portfolioCountRes] = await Promise.all([
+  const [orgRes, contactsRes, portfolioRes] = await Promise.all([
     sb
       .from("organizations")
       .select("id, name, website, entity_types(type_name)")
@@ -36,8 +43,9 @@ export default async function FirmDetailPage({ params }: PageProps) {
       .order("last_name"),
     sb
       .from("portfolio_investments")
-      .select("company_id", { count: "exact", head: true })
-      .eq("org_id", orgId),
+      .select("investment_stage, companies(id, name, website, description)", { count: "exact" })
+      .eq("org_id", orgId)
+      .range(portfolioPage * PORTFOLIO_PAGE_SIZE, (portfolioPage + 1) * PORTFOLIO_PAGE_SIZE - 1),
   ]);
 
   if (!orgRes.data) {
@@ -55,7 +63,22 @@ export default async function FirmDetailPage({ params }: PageProps) {
 
   const org = orgRes.data as any;
   const contacts = (contactsRes.data ?? []) as unknown as ContactWithInvestments[];
-  const totalCompanies = portfolioCountRes.count ?? 0;
+  const totalCompanies = portfolioRes.count ?? 0;
+  const totalPortfolioPages = Math.ceil(totalCompanies / PORTFOLIO_PAGE_SIZE);
+
+  const portfolioCompanies: PortfolioCompany[] = (portfolioRes.data ?? [])
+    .map((pi: any) => {
+      const co = Array.isArray(pi.companies) ? pi.companies[0] : pi.companies;
+      if (!co?.id) return null;
+      return {
+        id: co.id,
+        name: co.name ?? "",
+        website: co.website ?? null,
+        description: co.description ?? null,
+        stage: pi.investment_stage ?? null,
+      };
+    })
+    .filter(Boolean) as PortfolioCompany[];
 
   const typeName = Array.isArray(org.entity_types)
     ? org.entity_types[0]?.type_name
@@ -125,6 +148,17 @@ export default async function FirmDetailPage({ params }: PageProps) {
         </div>
       ) : (
         <FirmContacts contacts={contacts} />
+      )}
+
+      {/* Full portfolio company list */}
+      {totalCompanies > 0 && (
+        <PortfolioSection
+          companies={portfolioCompanies}
+          page={portfolioPage + 1}
+          totalPages={totalPortfolioPages}
+          totalCount={totalCompanies}
+          orgId={orgId}
+        />
       )}
     </div>
   );

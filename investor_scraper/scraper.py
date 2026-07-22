@@ -1093,6 +1093,648 @@ def scrape_yc_companies(sb: Client, dry_run: bool = False, limit: int | None = N
     log.info("YC companies done: %d written, %d skipped", inserted, skipped)
 
 
+# ---------------------------------------------------------------------------
+# Tribeca Venture Partners — team + companies
+# ---------------------------------------------------------------------------
+
+_TRIBECA_BASE = "https://tribecavp.com"
+
+_TRIBECA_SECTOR_SLUG: dict[str, str] = {
+    "ai-machine-learning": "AI & Machine Learning",
+    "climate-tech": "Climate Tech",
+    "consumer": "Consumer",
+    "deep-tech": "Deep Tech",
+    "digital-health": "Digital Health",
+    "edtech": "Edtech",
+    "fintech": "Fintech",
+    "marketplaces": "Marketplaces",
+    "martech": "Martech",
+    "robotics": "Robotics",
+    "saas": "SaaS",
+    "security": "Security",
+}
+
+_TRIBECA_STAGE_SLUG: dict[str, str] = {
+    "seed": "Seed",
+    "series-a": "Series A",
+    "series-b": "Series B",
+    "series-c": "Series C",
+    "series-d": "Series D",
+}
+
+
+def _parse_tribeca_team_listing(html: str) -> list[str]:
+    """Return absolute profile URLs from the /team/ grid."""
+    soup = BeautifulSoup(html, "html.parser")
+    seen: set[str] = set()
+    urls: list[str] = []
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        if "/team/" not in href:
+            continue
+        after_team = href.split("/team/", 1)[-1].strip("/")
+        if not after_team:
+            continue
+        full = href if href.startswith("http") else _TRIBECA_BASE + href
+        if full not in seen:
+            seen.add(full)
+            urls.append(full)
+    return urls
+
+
+def _parse_tribeca_partner_profile(html: str) -> dict | None:
+    """
+    Parse one Tribeca partner profile page.
+
+    Returns {name, title, bio, linkedin, twitter, investments: [{name, status}]}.
+    """
+    soup = BeautifulSoup(html, "html.parser")
+
+    h1 = soup.select_one("article h1") or soup.select_one("h1")
+    if not h1:
+        return None
+    name = re.sub(r"\s+", " ", h1.get_text(separator=" ")).strip()
+
+    title_el = soup.select_one("h2.font-bold.text-base")
+    title = title_el.get_text(strip=True) if title_el else None
+
+    linkedin: str | None = None
+    twitter: str | None = None
+    for a in soup.select("ul.list-none a[href]"):
+        href = a["href"]
+        if "linkedin.com" in href:
+            linkedin = href
+        elif "twitter.com" in href or "x.com" in href:
+            twitter = href
+
+    # Full bio is in the first div.prose.max-w-none on the page
+    # (the Five Things items use span.prose, not div)
+    bio_div = soup.select_one("div.prose.max-w-none")
+    bio = None
+    if bio_div:
+        parts = [p.get_text(strip=True) for p in bio_div.find_all("p") if p.get_text(strip=True)]
+        bio = " ".join(parts) or None
+
+    investments: list[dict] = []
+    inv_header = soup.find("h2", string=re.compile(r"^\s*Investments\s*$", re.I))
+    if inv_header:
+        inv_ul = inv_header.find_next("ul")
+        if inv_ul:
+            for li in inv_ul.find_all("li"):
+                a_tag = li.find("a")
+                if not a_tag:
+                    continue
+                name_span = a_tag.find("span", class_=lambda c: c and "text-gray-900" in c)
+                status_span = a_tag.find("span", class_=lambda c: c and "text-orange-500" in c)
+                co_name = name_span.get_text(strip=True) if name_span else None
+                raw_status = status_span.get_text(strip=True) if status_span else None
+                status = raw_status if raw_status and raw_status.strip() and raw_status.strip() != "\xa0" else None
+                if co_name:
+                    investments.append({"name": co_name, "status": status})
+
+    return {
+        "name": name,
+        "title": title,
+        "bio": bio,
+        "linkedin": linkedin,
+        "twitter": twitter,
+        "investments": investments,
+    }
+
+
+def _get_tribeca_companies_data(url: str) -> list[dict]:
+    """
+    Load the companies page and extract the Alpine.js reactive `companies` array.
+
+    Falls back to parsing rendered card HTML if Alpine data is unavailable.
+    """
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        ctx = browser.new_context(user_agent=USER_AGENT, viewport={"width": 1440, "height": 900})
+        page = ctx.new_page()
+        page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        page.goto(url, wait_until="networkidle", timeout=60000)
+        page.wait_for_timeout(3000)
+
+        # Try Alpine v3 internal data stack
+        companies = page.evaluate("""
+            () => {
+                const els = document.querySelectorAll('[x-data]');
+                for (const el of els) {
+                    if (el._x_dataStack) {
+                        for (const d of el._x_dataStack) {
+                            if (Array.isArray(d.companies)) return d.companies;
+                        }
+                    }
+                }
+                return null;
+            }
+        """)
+
+        if not companies:
+            # Fallback: parse rendered grid-item divs
+            html = page.content()
+            ctx.close()
+            browser.close()
+            return _parse_tribeca_companies_html(html)
+
+        ctx.close()
+        browser.close()
+    return companies
+
+
+def _parse_tribeca_companies_html(html: str) -> list[dict]:
+    """Fallback: extract company data from rendered grid-item divs."""
+    soup = BeautifulSoup(html, "html.parser")
+    results = []
+    seen: set[str] = set()
+    for div in soup.select("div.grid-item"):
+        img = div.find("img")
+        alt = (img.get("alt") or "").strip() if img else ""
+        name = re.sub(r"\s+Logo(\s+Grey)?\s*$", "", alt, flags=re.IGNORECASE).strip()
+        if not name or name in seen:
+            continue
+        seen.add(name)
+        css_classes = " ".join(div.get("class", []))
+        badge = div.select_one("span.block")
+        status = badge.get_text(strip=True) if badge else None
+        results.append({
+            "title": name,
+            "postTaxTerms": css_classes.split(),
+            "companyDetails": {"status": status or ""},
+        })
+    return results
+
+
+def scrape_tribeca_team(sb: Client, dry_run: bool = False, limit: int | None = None) -> None:
+    """
+    Scrape Tribeca VP /team/ → each partner profile → DB.
+
+    Writes: organization, contacts, companies, portfolio_investments,
+    contact_investments (with exit_note from status badge).
+    """
+    org_name = "Tribeca Venture Partners"
+    org_website = _TRIBECA_BASE
+    entity_type = "Early-Stage VC"
+
+    log.info("Fetching Tribeca team listing")
+    html = _fetch_yc(_TRIBECA_BASE + "/team/")
+    profile_urls = _parse_tribeca_team_listing(html)
+    log.info("Found %d partner profiles", len(profile_urls))
+
+    if limit:
+        profile_urls = profile_urls[:limit]
+
+    all_profiles: list[dict] = []
+    for i, url in enumerate(profile_urls):
+        log.info("[%d/%d] Fetching %s", i + 1, len(profile_urls), url)
+        try:
+            html = _fetch_yc(url)
+            profile = _parse_tribeca_partner_profile(html)
+            if profile:
+                all_profiles.append(profile)
+                log.info("  %s | %s | %d investments",
+                         profile.get("name"), profile.get("title"),
+                         len(profile.get("investments", [])))
+            else:
+                log.warning("  Could not parse profile at %s", url)
+        except Exception:
+            log.exception("  Failed to fetch %s", url)
+        time.sleep(CRAWL_DELAY_SECONDS)
+
+    if dry_run:
+        log.info("[DRY-RUN] Would write %d Tribeca partners", len(all_profiles))
+        for p in all_profiles:
+            log.info("  %s | %s | linkedin=%s | twitter=%s | %d investments",
+                     p.get("name"), p.get("title"),
+                     bool(p.get("linkedin")), bool(p.get("twitter")),
+                     len(p.get("investments", [])))
+        return
+
+    org_id = get_or_create_organization(sb, org_name, entity_type, org_website)
+
+    for profile in all_profiles:
+        try:
+            name = profile.get("name", "")
+            contact_id = get_or_create_contact(sb, org_id, name)
+            update_contact_profile(
+                sb, contact_id,
+                bio=profile.get("bio"),
+                email=None,
+                role=profile.get("title") or "Partner",
+                linkedin_url=profile.get("linkedin"),
+                other_sites=(
+                    {"twitter": profile["twitter"]}
+                    if profile.get("twitter") else None
+                ),
+            )
+            for inv in profile.get("investments", []):
+                co_name = inv["name"].strip()
+                if not co_name:
+                    continue
+                company_id = upsert_company(sb, co_name, None, None)
+                get_or_create_contact_investment(
+                    sb, contact_id, company_id, "current", inv.get("status")
+                )
+                get_or_create_portfolio_investment(sb, org_id, company_id, None)
+            log.info("Wrote %s: %d investments", name, len(profile.get("investments", [])))
+        except Exception:
+            log.exception("Failed writing partner %r, skipping", profile.get("name"))
+
+
+def scrape_tribeca_companies(sb: Client, dry_run: bool = False, limit: int | None = None) -> None:
+    """
+    Scrape Tribeca VP /companies/ page via Alpine.js reactive data.
+
+    Upserts companies, portfolio_investments (with investment stage),
+    and vertical_focus entries for TVP from sector taxonomy.
+    """
+    org_name = "Tribeca Venture Partners"
+    org_website = _TRIBECA_BASE
+    entity_type = "Early-Stage VC"
+
+    log.info("Loading Tribeca companies page")
+    companies = _get_tribeca_companies_data(_TRIBECA_BASE + "/companies/")
+    log.info("Found %d companies", len(companies))
+
+    if limit:
+        companies = companies[:limit]
+
+    if dry_run:
+        log.info("[DRY-RUN] Would write %d Tribeca companies", len(companies))
+        for c in companies[:5]:
+            terms = c.get("postTaxTerms") or []
+            details = c.get("companyDetails") or {}
+            _raw = (details.get("about") or "").strip()
+            about = BeautifulSoup(_raw, "html.parser").get_text(separator=" ").strip()[:80]
+            log.info("  %r terms=%r about=%r", c.get("title"), terms[:4], about)
+        return
+
+    org_id = get_or_create_organization(sb, org_name, entity_type, org_website)
+
+    inserted = skipped = 0
+    for c in companies:
+        try:
+            name = (c.get("title") or "").strip()
+            if not name:
+                skipped += 1
+                continue
+
+            details = c.get("companyDetails") or {}
+            website = (details.get("website") or "").strip() or None
+            _about_raw = (details.get("about") or "").strip()
+            description = BeautifulSoup(_about_raw, "html.parser").get_text(separator=" ").strip() or None
+            stage: str | None = None
+            sectors: list[str] = []
+
+            for term in (c.get("postTaxTerms") or []):
+                if term in _TRIBECA_STAGE_SLUG:
+                    stage = _TRIBECA_STAGE_SLUG[term]
+                elif term in _TRIBECA_SECTOR_SLUG:
+                    sectors.append(_TRIBECA_SECTOR_SLUG[term])
+
+            company_id = upsert_company(sb, name, website, description)
+            get_or_create_portfolio_investment(sb, org_id, company_id, stage)
+
+            for sector in sectors:
+                vertical_id = get_or_create_vertical(sb, sector)
+                get_or_create_vertical_focus(sb, org_id, vertical_id)
+
+            inserted += 1
+            if inserted % 20 == 0:
+                log.info("  Progress: %d companies written", inserted)
+        except Exception:
+            log.exception("  Failed for %r, skipping", c.get("title"))
+            skipped += 1
+
+    log.info("Tribeca companies done: %d written, %d skipped", inserted, skipped)
+
+
+# ---------------------------------------------------------------------------
+# Alumni Ventures (av.vc) — team scraper
+# ---------------------------------------------------------------------------
+
+_AV_VC_BASE = "https://www.av.vc"
+_AV_VC_INVESTMENT_SECTIONS = {"Leadership", "Investment Professionals"}
+
+
+def _fetch_av_vc_team_data(url: str) -> list[dict]:
+    """
+    Fetch av.vc/about, extract __NEXT_DATA__ JSON, return a flat list of
+    team member dicts for Leadership and Investment Professionals sections.
+    """
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        ctx = browser.new_context(user_agent=USER_AGENT, viewport={"width": 1440, "height": 900})
+        page = ctx.new_page()
+        page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        page.goto(url, wait_until="networkidle", timeout=60000)
+        page.wait_for_timeout(2000)
+        next_data_raw = page.evaluate(
+            "() => document.getElementById('__NEXT_DATA__')?.textContent"
+        )
+        ctx.close()
+        browser.close()
+
+    if not next_data_raw:
+        log.warning("__NEXT_DATA__ not found on %s", url)
+        return []
+
+    try:
+        data = _json.loads(next_data_raw)
+    except Exception:
+        log.exception("Failed to parse __NEXT_DATA__ JSON")
+        return []
+
+    modules = data.get("props", {}).get("pageProps", {}).get("modules", [])
+    teams_module = next((m for m in modules if m.get("type") == "teams"), None)
+    if not teams_module:
+        log.warning("No 'teams' module found in __NEXT_DATA__")
+        return []
+
+    sections = (teams_module.get("data", {}).get("teams") or {}).get("sections", [])
+    people: list[dict] = []
+    for section in sections:
+        section_name = section.get("sectionName", "")
+        if section_name not in _AV_VC_INVESTMENT_SECTIONS:
+            continue
+        for pe in section.get("people", []):
+            info = (pe.get("person") or {}).get("info") or {}
+            name = (info.get("name") or "").strip()
+            if not name:
+                continue
+
+            linkedin: str | None = None
+            twitter: str | None = None
+            for social in (info.get("some") or []):
+                stype = (social.get("type") or "").lower()
+                link = (social.get("link") or "").strip()
+                if not link:
+                    continue
+                if stype == "linkedin":
+                    linkedin = link
+                elif stype in ("twitter", "x"):
+                    twitter = link
+
+            bio_html = (info.get("bio") or {}).get("richtext") or info.get("summary") or ""
+            bio = BeautifulSoup(bio_html, "html.parser").get_text(separator=" ").strip() or None
+
+            deals = [
+                d["title"].strip()
+                for d in (info.get("notableDeals") or [])
+                if d.get("title") and d["title"].strip()
+            ]
+
+            people.append({
+                "name": name,
+                "role": (pe.get("title") or info.get("title") or "Investor").strip(),
+                "bio": bio,
+                "linkedin": linkedin,
+                "twitter": twitter,
+                "section": section_name,
+                "deals": deals,
+            })
+
+    return people
+
+
+def scrape_av_vc_team(sb: Client, dry_run: bool = False, limit: int | None = None) -> None:
+    """
+    Scrape Alumni Ventures /about page team data from __NEXT_DATA__ JSON.
+
+    Scrapes Leadership + Investment Professionals sections.
+    Writes: organization, contacts (with bio/LinkedIn), companies (notableDeals),
+    portfolio_investments, contact_investments.
+    """
+    org_name = "Alumni Ventures"
+    org_website = _AV_VC_BASE
+    entity_type = "Multi-Stage VC"
+
+    log.info("Fetching Alumni Ventures team data from __NEXT_DATA__")
+    people = _fetch_av_vc_team_data(_AV_VC_BASE + "/about")
+    log.info("Found %d people across target sections", len(people))
+
+    if limit:
+        people = people[:limit]
+
+    if dry_run:
+        log.info("[DRY-RUN] Would write %d Alumni Ventures contacts", len(people))
+        for p in people:
+            log.info("  %s | %s | linkedin=%s | %d deals",
+                     p["name"], p.get("role"), bool(p.get("linkedin")), len(p.get("deals", [])))
+        return
+
+    org_id = get_or_create_organization(sb, org_name, entity_type, org_website)
+
+    for person in people:
+        try:
+            name = person["name"]
+            contact_id = get_or_create_contact(sb, org_id, name)
+            update_contact_profile(
+                sb, contact_id,
+                bio=person.get("bio"),
+                email=None,
+                role=person.get("role"),
+                linkedin_url=person.get("linkedin"),
+                other_sites=(
+                    {"twitter": person["twitter"]}
+                    if person.get("twitter") else None
+                ),
+            )
+            for deal_name in person.get("deals", []):
+                company_id = upsert_company(sb, deal_name, None, None)
+                get_or_create_contact_investment(sb, contact_id, company_id, "current", None)
+                get_or_create_portfolio_investment(sb, org_id, company_id, None)
+            log.info("Wrote %s | %s | %d deals", name, person.get("section"), len(person.get("deals", [])))
+        except Exception:
+            log.exception("Failed writing %r, skipping", person.get("name"))
+
+
+def _build_av_vc_fund_keyword_map(portfolio_companies: list[dict]) -> dict[str, str]:
+    """
+    Build keyword → fund_slug from portfolio company fund tags.
+
+    "University of Texas: Congress Avenue Ventures" → keyword "congress avenue"
+    "AV: Sports Fund" → keyword "sports fund"
+    "AV: Deep Tech" → keyword "deep tech"
+    """
+    result: dict[str, str] = {}
+    for c in portfolio_companies:
+        for fund in (c.get("funds") or []):
+            slug = fund.get("slug")
+            name = fund.get("name") or ""
+            if not slug or not name:
+                continue
+            kw = name
+            if ":" in kw:
+                kw = kw.split(":", 1)[1].strip()
+            kw = re.sub(r"\s+ventures?$", "", kw, flags=re.IGNORECASE).strip().lower()
+            if kw and slug not in result.values():
+                result[kw] = slug
+    return result
+
+
+def _av_vc_get_fund_slugs_from_role(role: str, keyword_map: dict[str, str]) -> list[str]:
+    """Return fund slugs whose keyword appears in the investor's role string."""
+    role_lower = role.lower()
+    return [slug for kw, slug in keyword_map.items() if kw in role_lower]
+
+
+def _fetch_av_vc_portfolio_data(url: str) -> list[dict]:
+    """
+    Fetch av.vc/portfolio, extract __NEXT_DATA__ JSON, return flat list of
+    company dicts: {name, description, website, stage, sector}.
+    """
+    with sync_playwright() as p:
+        browser = p.chromium.launch(headless=True)
+        ctx = browser.new_context(user_agent=USER_AGENT, viewport={"width": 1440, "height": 900})
+        page = ctx.new_page()
+        page.add_init_script("Object.defineProperty(navigator, 'webdriver', {get: () => undefined})")
+        page.goto(url, wait_until="networkidle", timeout=60000)
+        page.wait_for_timeout(3000)
+        next_data_raw = page.evaluate(
+            "() => document.getElementById('__NEXT_DATA__')?.textContent"
+        )
+        ctx.close()
+        browser.close()
+
+    if not next_data_raw:
+        log.warning("__NEXT_DATA__ not found on %s", url)
+        return []
+
+    try:
+        data = _json.loads(next_data_raw)
+    except Exception:
+        log.exception("Failed to parse __NEXT_DATA__ JSON")
+        return []
+
+    modules = data.get("props", {}).get("pageProps", {}).get("modules", [])
+    portfolio_module = next((m for m in modules if m.get("type") == "portfolio"), None)
+    if not portfolio_module:
+        log.warning("No 'portfolio' module found in __NEXT_DATA__")
+        return []
+
+    return portfolio_module["data"]["portfolio"].get("companies") or []
+
+
+def scrape_av_vc_companies(sb: Client, dry_run: bool = False, limit: int | None = None) -> None:
+    """
+    Scrape Alumni Ventures /portfolio page from __NEXT_DATA__ JSON.
+
+    Upserts all portfolio companies with descriptions, websites, and
+    portfolio_investments for Alumni Ventures. Sector tags → vertical_focus.
+    """
+    org_name = "Alumni Ventures"
+    org_website = _AV_VC_BASE
+    entity_type = "Multi-Stage VC"
+
+    log.info("Fetching Alumni Ventures portfolio data from __NEXT_DATA__")
+    companies = _fetch_av_vc_portfolio_data(_AV_VC_BASE + "/portfolio")
+    log.info("Found %d companies", len(companies))
+
+    if limit:
+        companies = companies[:limit]
+
+    if dry_run:
+        log.info("[DRY-RUN] Would write %d AV portfolio companies", len(companies))
+        for c in companies[:5]:
+            info = c.get("info") or {}
+            tags = c.get("tags") or {}
+            log.info("  %r  stage=%r  sector=%r  desc=%r",
+                     c.get("name"),
+                     (tags.get("stage") or {}).get("name"),
+                     (tags.get("sector") or {}).get("name"),
+                     (info.get("description") or "")[:80])
+        return
+
+    org_id = get_or_create_organization(sb, org_name, entity_type, org_website)
+
+    # Phase 1: upsert companies and build fund → [company_id] index
+    fund_slug_to_company_ids: dict[str, list[str]] = {}
+    inserted = skipped = 0
+    for i, c in enumerate(companies):
+        try:
+            name = (c.get("name") or "").strip()
+            if not name:
+                skipped += 1
+                continue
+
+            info = c.get("info") or {}
+            description = (info.get("description") or "").strip() or None
+            website = (info.get("url") or "").strip() or None
+            tags = c.get("tags") or {}
+            stage_name = (tags.get("stage") or {}).get("name") or None
+            sector_name = (tags.get("sector") or {}).get("name") or None
+
+            company_id = upsert_company(sb, name, website, description)
+            get_or_create_portfolio_investment(sb, org_id, company_id, stage_name)
+
+            for fund in (c.get("funds") or []):
+                slug = fund.get("slug")
+                if slug:
+                    fund_slug_to_company_ids.setdefault(slug, []).append(company_id)
+
+            if sector_name:
+                vertical_id = get_or_create_vertical(sb, sector_name)
+                get_or_create_vertical_focus(sb, org_id, vertical_id)
+
+            inserted += 1
+            if inserted % 100 == 0:
+                log.info("  Progress: %d/%d companies written", inserted, len(companies))
+        except Exception:
+            log.exception("  Failed for %r, skipping", c.get("name"))
+            skipped += 1
+
+    log.info("AV portfolio phase 1 done: %d written, %d skipped", inserted, skipped)
+
+    # Phase 2: link AV contacts to all companies in their fund(s) via contact_investments
+    keyword_map = _build_av_vc_fund_keyword_map(companies)
+    log.info("Fund keyword map: %d entries (from %d funds)", len(keyword_map), len(fund_slug_to_company_ids))
+
+    contacts_res = sb.table("contacts").select("id, first_name, last_name, role").eq("org_id", org_id).execute()
+    log.info("Linking %d AV contacts to fund portfolio companies", len(contacts_res.data))
+
+    total_inserted = 0
+    for contact in contacts_res.data:
+        contact_id = contact["id"]
+        role = contact.get("role") or ""
+        if not role:
+            continue
+        fund_slugs = _av_vc_get_fund_slugs_from_role(role, keyword_map)
+        if not fund_slugs:
+            continue
+        wanted_ids = list(dict.fromkeys(
+            cid
+            for slug in fund_slugs
+            for cid in fund_slug_to_company_ids.get(slug, [])
+        ))
+        display_name = f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip()
+        log.info("  %s → %d fund(s), %d companies", display_name, len(fund_slugs), len(wanted_ids))
+
+        # Fetch existing contact_investments for this contact in one query
+        existing_res = (
+            sb.table("contact_investments")
+            .select("company_id")
+            .eq("contact_id", contact_id)
+            .eq("relationship", "current")
+            .execute()
+        )
+        existing_set = {r["company_id"] for r in existing_res.data}
+        to_insert = [cid for cid in wanted_ids if cid not in existing_set]
+
+        # Batch insert in chunks of 500
+        for chunk_start in range(0, len(to_insert), 500):
+            chunk = to_insert[chunk_start : chunk_start + 500]
+            rows = [{"contact_id": contact_id, "company_id": cid, "relationship": "current", "exit_note": None} for cid in chunk]
+            try:
+                sb.table("contact_investments").insert(rows).execute()
+                total_inserted += len(chunk)
+            except Exception:
+                log.exception("    batch insert failed for %s (chunk %d)", display_name, chunk_start)
+
+    log.info("AV fund linkage done: %d new contact_investments inserted", total_inserted)
+
+
 FIRM_REGISTRY = {
     "greylock": {
         "name": "Greylock",
@@ -1538,10 +2180,14 @@ TEAM_SCRAPERS = {
     "sequoia": scrape_sequoia_team,
     "accel": scrape_accel_team,
     "yc": scrape_yc_partners,
+    "tribeca": scrape_tribeca_team,
+    "avvc": scrape_av_vc_team,
 }
 
 COMPANIES_SCRAPERS = {
     "yc": scrape_yc_companies,
+    "tribeca": scrape_tribeca_companies,
+    "avvc": scrape_av_vc_companies,
 }
 
 
