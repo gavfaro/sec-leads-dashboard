@@ -54,7 +54,7 @@ export default function AiEnrichCard({
 
   if (existingProfile) {
     return (
-      <section className="border-4 border-black bg-[#10B981] mb-12 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
+      <section className="border-4 border-black bg-[#2596BE] mb-12 shadow-[4px_4px_0px_0px_rgba(0,0,0,1)]">
         <div className="bg-black text-white p-2 border-b-4 border-black font-black uppercase text-sm tracking-wide">
           🤖 AI Intelligence Profile
         </div>
@@ -82,7 +82,7 @@ export default function AiEnrichCard({
               <a
                 href={existingProfile.ceo_linkedin}
                 target="_blank"
-                className="font-mono text-xs underline bg-[#10B981] px-1 border border-black"
+                className="font-mono text-xs underline bg-[#2596BE] px-1 border border-black"
               >
                 LinkedIn Profile
               </a>
@@ -144,7 +144,7 @@ export default function AiEnrichCard({
       <button
         onClick={runAiEngine}
         disabled={loading}
-        className="bg-[#10B981] border-4 border-black text-black font-black uppercase px-8 py-3 hover:bg-emerald-400 transition-none disabled:opacity-50 disabled:cursor-not-allowed shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px]"
+        className="bg-[#2596BE] border-4 border-black text-black font-black uppercase px-8 py-3 hover:bg-emerald-400 transition-none disabled:opacity-50 disabled:cursor-not-allowed shadow-[4px_4px_0px_0px_rgba(0,0,0,1)] hover:shadow-none hover:translate-x-[4px] hover:translate-y-[4px]"
       >
         {loading ? "Executing AI Pipeline..." : "▶ Run AI Intelligence Profile"}
       </button>

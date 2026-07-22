@@ -45,7 +45,7 @@ export default async function FirmDetailPage({ params }: PageProps) {
       <div className="max-w-4xl mx-auto p-6 mt-12 border-2 border-black bg-zinc-100 font-bold uppercase text-black">
         Firm not found.
         <div className="mt-4">
-          <Link href="/investors" className="underline text-[#10B981]">
+          <Link href="/investors" className="underline text-[#2596BE]">
             ← Back to Investors
           </Link>
         </div>
@@ -67,7 +67,7 @@ export default async function FirmDetailPage({ params }: PageProps) {
       <nav className="mb-6">
         <Link
           href="/investors"
-          className="inline-block px-4 py-2 border-2 border-black font-bold uppercase text-xs tracking-wider bg-white hover:bg-[#10B981] transition-none"
+          className="inline-block px-4 py-2 border-2 border-black font-bold uppercase text-xs tracking-wider bg-white hover:bg-[#2596BE] transition-none"
         >
           ← All Firms
         </Link>
@@ -78,7 +78,7 @@ export default async function FirmDetailPage({ params }: PageProps) {
         <div className="flex flex-wrap justify-between items-start gap-4">
           <div>
             {typeName && (
-              <span className="text-[9px] font-black uppercase tracking-wider bg-[#10B981] px-2 py-0.5 border border-black">
+              <span className="text-[9px] font-black uppercase tracking-wider bg-[#2596BE] px-2 py-0.5 border border-black">
                 {typeName}
               </span>
             )}
@@ -90,7 +90,7 @@ export default async function FirmDetailPage({ params }: PageProps) {
                 href={org.website}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="text-xs font-mono text-zinc-500 hover:text-[#10B981] mt-1 inline-block"
+                className="text-xs font-mono text-zinc-500 hover:text-[#2596BE] mt-1 inline-block"
               >
                 {org.website.replace(/^https?:\/\//, "")} ↗
               </a>
@@ -98,7 +98,7 @@ export default async function FirmDetailPage({ params }: PageProps) {
           </div>
 
           <div className="flex gap-4 font-mono">
-            <div className="border-2 border-black p-3 text-center bg-[#10B981]/10">
+            <div className="border-2 border-black p-3 text-center bg-[#2596BE]/10">
               <span className="text-3xl font-black tabular-nums block leading-none">
                 {contacts.length}
               </span>

@@ -106,9 +106,9 @@ export default async function InvestorsPage() {
 
   return (
     <div className="max-w-7xl mx-auto p-4 font-sans text-black pb-16">
-      <header className="mb-6 border-b-4 border-black pb-4 flex flex-wrap gap-4 justify-between items-end">
+      <header className="mb-6 border-b-4 border-white pb-4 flex flex-wrap gap-4 justify-between items-end">
         <div>
-          <h1 className="text-3xl font-black tracking-tight uppercase">
+          <h1 className="text-3xl font-black tracking-tight uppercase text-white">
             Investor Intelligence
           </h1>
           <p className="text-sm font-bold mt-1 text-zinc-500 uppercase tracking-wider">
@@ -116,7 +116,7 @@ export default async function InvestorsPage() {
           </p>
         </div>
         <div className="flex gap-3">
-          <div className="text-sm font-bold bg-[#10B981] px-4 py-2 border-2 border-black uppercase tracking-wide">
+          <div className="text-sm font-bold bg-[#2596BE] px-4 py-2 border-2 border-black uppercase tracking-wide">
             {orgs.length} Firms
           </div>
           <div className="text-sm font-bold bg-zinc-100 px-4 py-2 border-2 border-black uppercase tracking-wide">

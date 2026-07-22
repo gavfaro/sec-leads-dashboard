@@ -74,7 +74,7 @@ export default function FindInvestors({ companies }: { companies: CompanyEntry[]
             onChange={(e) => setQuery(e.target.value)}
             placeholder="e.g. fintech, security, developer tools, healthcare AI…"
             autoFocus
-            className="flex-1 border-2 border-black p-3 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#10B981]"
+            className="flex-1 border-2 border-black p-3 text-base font-sans focus:outline-none focus:ring-2 focus:ring-[#2596BE]"
           />
           {query && (
             <button
@@ -132,7 +132,7 @@ export default function FindInvestors({ companies }: { companies: CompanyEntry[]
                     </p>
                     <Link
                       href={`/investors/${inv.orgId}`}
-                      className="text-[10px] font-bold uppercase text-zinc-500 hover:text-[#10B981] transition-none"
+                      className="text-[10px] font-bold uppercase text-zinc-500 hover:text-[#2596BE] transition-none"
                     >
                       {inv.orgName}
                     </Link>
@@ -142,7 +142,7 @@ export default function FindInvestors({ companies }: { companies: CompanyEntry[]
                       href={inv.linkedin_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex-shrink-0 p-1.5 border-2 border-black hover:bg-[#10B981] hover:text-white transition-none"
+                      className="flex-shrink-0 p-1.5 border-2 border-black hover:bg-[#2596BE] hover:text-white transition-none"
                       aria-label="LinkedIn"
                     >
                       <LinkedInIcon />
@@ -153,7 +153,7 @@ export default function FindInvestors({ companies }: { companies: CompanyEntry[]
                   <span className="text-[9px] font-black uppercase tracking-wider text-zinc-400">
                     Portfolio Matches
                   </span>
-                  <span className="font-mono font-black text-lg tabular-nums text-[#10B981]">
+                  <span className="font-mono font-black text-lg tabular-nums text-[#2596BE]">
                     {inv.matchCount}
                   </span>
                 </div>
@@ -200,7 +200,7 @@ export default function FindInvestors({ companies }: { companies: CompanyEntry[]
                             <Link
                               key={inv.contactId}
                               href={`/investors/${inv.orgId}`}
-                              className="text-[10px] font-bold border border-black px-2 py-0.5 bg-white hover:bg-[#10B981]/20 transition-none whitespace-nowrap"
+                              className="text-[10px] font-bold border border-black px-2 py-0.5 bg-white hover:bg-[#2596BE]/20 transition-none whitespace-nowrap"
                               title={`${inv.role ?? ""} · ${inv.orgName}`}
                             >
                               {inv.firstName} {inv.lastName}
@@ -227,7 +227,7 @@ function HighlightedText({ text, query }: { text: string; query: string }) {
   return (
     <>
       {text.slice(0, idx)}
-      <mark className="bg-[#10B981]/30 text-black not-italic font-bold">
+      <mark className="bg-[#2596BE]/30 text-black not-italic font-bold">
         {text.slice(idx, idx + query.length)}
       </mark>
       {text.slice(idx + query.length)}

@@ -83,7 +83,7 @@ function PartnerModal({
               </h2>
               <Link
                 href={`/investors/${partner.orgId}`}
-                className="text-xs font-bold uppercase text-zinc-500 hover:text-[#10B981] mt-0.5 inline-block"
+                className="text-xs font-bold uppercase text-zinc-500 hover:text-[#2596BE] mt-0.5 inline-block"
               >
                 {partner.orgName} ↗
               </Link>
@@ -93,7 +93,7 @@ function PartnerModal({
                 href={partner.linkedin_url}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="flex-shrink-0 flex items-center gap-2 px-3 py-2 border-2 border-black bg-white hover:bg-[#10B981] font-bold text-xs uppercase tracking-wide transition-none"
+                className="flex-shrink-0 flex items-center gap-2 px-3 py-2 border-2 border-black bg-white hover:bg-[#2596BE] font-bold text-xs uppercase tracking-wide transition-none"
               >
                 <LinkedInIcon />
                 LinkedIn
@@ -103,7 +103,7 @@ function PartnerModal({
 
           {/* Bio */}
           {partner.bio && (
-            <div className="border-l-4 border-[#10B981] pl-4">
+            <div className="border-l-4 border-[#2596BE] pl-4">
               <p className="text-sm leading-relaxed text-zinc-700 font-sans">
                 {partner.bio}
               </p>
@@ -213,14 +213,14 @@ export default function InvestorExplorer({
               ? "Search firms…"
               : "Search by partner name, firm, or role…"
           }
-          className="border-2 border-black p-2 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#10B981] flex-1 min-w-48"
+          className="border-2 border-black p-2 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#2596BE] flex-1 min-w-48 bg-white text-black"
         />
 
         {view === "partners" && roles.length > 0 && (
           <select
             value={roleFilter}
             onChange={(e) => setRoleFilter(e.target.value)}
-            className="border-2 border-black p-2 font-mono text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#10B981]"
+            className="border-2 border-black p-2 font-mono text-sm bg-white focus:outline-none focus:ring-2 focus:ring-[#2596BE]"
           >
             <option value="">All Roles</option>
             {roles.map((r) => (
@@ -240,7 +240,7 @@ export default function InvestorExplorer({
                 "px-4 py-2 text-xs font-black uppercase tracking-wider transition-none",
                 i > 0 && "border-l-2 border-black",
                 view === v
-                  ? "bg-[#10B981] text-black"
+                  ? "bg-[#2596BE] text-black"
                   : "bg-white text-black hover:bg-zinc-100",
               ]
                 .filter(Boolean)
@@ -264,7 +264,7 @@ export default function InvestorExplorer({
               <Link
                 key={org.id}
                 href={`/investors/${org.id}`}
-                className="block border-2 border-black bg-white p-5 hover:border-[#10B981] hover:bg-[#10B981]/5 transition-none group"
+                className="block border-2 border-black bg-white p-5 hover:border-[#2596BE] hover:bg-[#2596BE]/5 transition-none group"
               >
                 <div className="flex items-start justify-between gap-2 mb-3 min-h-[24px]">
                   {org.typeName && (
@@ -278,20 +278,20 @@ export default function InvestorExplorer({
                     </span>
                   )}
                 </div>
-                <h2 className="text-xl font-black uppercase tracking-tight mb-4 group-hover:text-[#10B981]">
+                <h2 className="text-xl font-black uppercase tracking-tight mb-4 group-hover:text-[#2596BE]">
                   {org.name}
                 </h2>
-                <div className="flex gap-6 border-t-2 border-black pt-3 font-mono">
+                <div className="flex gap-6 border-t-2 border-black group-hover:border-white pt-3 font-mono">
                   <div>
-                    <span className="text-2xl font-black tabular-nums leading-none">
+                    <span className="text-2xl font-black tabular-nums leading-none group-hover:text-white">
                       {org.partnerCount}
                     </span>
                     <span className="text-[9px] font-black uppercase tracking-wider text-zinc-500 block mt-0.5">
                       Partners
                     </span>
                   </div>
-                  <div className="border-l-2 border-black pl-6">
-                    <span className="text-2xl font-black tabular-nums leading-none">
+                  <div className="border-l-2 border-black group-hover:border-white pl-6">
+                    <span className="text-2xl font-black tabular-nums leading-none group-hover:text-white">
                       {org.companyCount}
                     </span>
                     <span className="text-[9px] font-black uppercase tracking-wider text-zinc-500 block mt-0.5">
@@ -309,7 +309,7 @@ export default function InvestorExplorer({
         <div className="overflow-x-auto border-2 border-black bg-white">
           <table className="w-full text-left border-collapse text-sm">
             <thead>
-              <tr className="bg-[#10B981] border-b-2 border-black font-black uppercase tracking-tight text-[10px]">
+              <tr className="bg-[#2596BE] border-b-2 border-black font-black uppercase tracking-tight text-[10px]">
                 <th className="p-3 border-r-2 border-black">Partner</th>
                 <th className="p-3 border-r-2 border-black">Firm</th>
                 <th className="p-3 border-r-2 border-black">Role</th>
@@ -335,7 +335,7 @@ export default function InvestorExplorer({
                     <td className="p-3 border-r-2 border-black">
                       <button
                         onClick={() => setSelectedPartner(p)}
-                        className="font-black uppercase text-xs tracking-tight hover:text-[#10B981] hover:underline text-left"
+                        className="font-black uppercase text-xs tracking-tight hover:text-[#2596BE] hover:underline text-left"
                       >
                         {p.firstName} {p.lastName}
                       </button>
@@ -343,7 +343,7 @@ export default function InvestorExplorer({
                     <td className="p-3 border-r-2 border-black">
                       <Link
                         href={`/investors/${p.orgId}`}
-                        className="font-bold text-xs uppercase text-zinc-600 hover:text-[#10B981] transition-none"
+                        className="font-bold text-xs uppercase text-zinc-600 hover:text-[#2596BE] transition-none"
                       >
                         {p.orgName}
                       </Link>
@@ -364,7 +364,7 @@ export default function InvestorExplorer({
                           href={p.linkedin_url}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="inline-flex p-1.5 border-2 border-black bg-white hover:bg-[#10B981] hover:text-white transition-none"
+                          className="inline-flex p-1.5 border-2 border-black bg-white hover:bg-[#2596BE] hover:text-white transition-none"
                           aria-label={`${p.firstName} ${p.lastName} on LinkedIn`}
                         >
                           <LinkedInIcon />

@@ -143,12 +143,12 @@ function Field({
 }
 
 const inputClass =
-  "border-2 border-black p-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[#10B981] bg-white";
+  "border-2 border-black p-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[#2596BE] bg-white";
 const selectClass = `${inputClass} font-sans`;
 
 function SectionLabel({ children }: { children: React.ReactNode }) {
   return (
-    <div className="w-full text-xs font-black uppercase tracking-widest text-white bg-black px-2 py-1 -mb-1">
+    <div className="w-full text-xs font-black uppercase tracking-widest text-white bg-[#2596BE] px-2 py-1 -mb-1">
       {children}
     </div>
   );
@@ -519,7 +519,7 @@ export default function FilterForm() {
               type="button"
               onClick={confirmSaveSearch}
               disabled={!newSearchName.trim() || isSaving}
-              className="bg-[#10B981] border-2 border-black text-black font-bold uppercase px-4 py-2 hover:bg-emerald-400 transition-none disabled:opacity-40"
+              className="bg-[#2596BE] border-2 border-black text-black font-bold uppercase px-4 py-2 hover:bg-emerald-400 transition-none disabled:opacity-40"
             >
               {isSaving ? "Saving..." : "Confirm"}
             </button>
@@ -535,7 +535,7 @@ export default function FilterForm() {
           <div className="flex gap-2 ml-auto">
             <button
               type="submit"
-              className="bg-[#10B981] border-2 border-black text-black font-bold uppercase px-6 py-2 hover:bg-emerald-400 transition-none"
+              className="bg-[#2596BE] border-2 border-black text-black font-bold uppercase px-6 py-2 hover:bg-emerald-400 transition-none"
             >
               Apply Filters
             </button>
@@ -578,7 +578,7 @@ export default function FilterForm() {
             <button
               type="button"
               onClick={() => loadSearch(search)}
-              className="px-2 py-1 hover:bg-[#10B981]/30 transition-none"
+              className="px-2 py-1 hover:bg-[#2596BE]/30 transition-none"
               title="Load this saved search"
             >
               {search.search_name}

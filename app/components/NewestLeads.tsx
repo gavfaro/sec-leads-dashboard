@@ -8,6 +8,14 @@ const supabase = createClient(
 
 const NEWEST_COUNT = 6;
 
+// SEC Form D allows an offering to be uncapped — target_raise comes back as
+// the literal string "Indefinite" rather than a number in that case, which
+// Number() turns into NaN.
+function formatOfferingAmount(value: string | number | null | undefined) {
+  if (value === "Indefinite") return "Indefinite";
+  return `$${Number(value || 0).toLocaleString()}`;
+}
+
 function timeAgo(isoDate: string) {
   const ms = Date.now() - new Date(isoDate).getTime();
   const hours = Math.floor(ms / 3_600_000);
@@ -31,7 +39,7 @@ export default async function NewestLeads() {
   return (
     <section className="mb-8">
       <div className="flex items-center justify-between mb-3">
-        <h2 className="text-xl font-black uppercase tracking-tight">
+        <h2 className="text-xl font-black uppercase tracking-tight text-white">
           🆕 Newest Additions
         </h2>
         <span className="text-xs font-bold uppercase tracking-wide text-zinc-500">
@@ -47,7 +55,7 @@ export default async function NewestLeads() {
             className="block border-2 border-black bg-white p-4 shadow-[3px_3px_0px_0px_rgba(0,0,0,1)] hover:shadow-[1px_1px_0px_0px_rgba(0,0,0,1)] hover:translate-x-[2px] hover:translate-y-[2px] transition-all"
           >
             <div className="flex justify-between items-start gap-2">
-              <span className="text-[10px] font-black uppercase bg-[#10B981] px-1.5 py-0.5 border border-black">
+              <span className="text-[10px] font-black uppercase bg-[#2596BE] px-1.5 py-0.5 border border-black">
                 {lead.industry || "General"}
               </span>
               <span className="text-[10px] font-bold uppercase text-zinc-500 shrink-0">
@@ -64,14 +72,14 @@ export default async function NewestLeads() {
             </p>
 
             <p className="text-xs font-mono mt-2">
-              Target: ${Number(lead.target_raise || 0).toLocaleString()}
+              Target: {formatOfferingAmount(lead.target_raise)}
             </p>
 
             {lead.ceo_name && (
               <p className="text-xs font-bold mt-2 truncate">
                 CEO: {lead.ceo_name}
                 {lead.ceo_linkedin && lead.ceo_linkedin !== "Not Found" && (
-                  <span className="text-[#10B981]"> · LinkedIn ✓</span>
+                  <span className="text-[#2596BE]"> · LinkedIn ✓</span>
                 )}
               </p>
             )}

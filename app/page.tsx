@@ -62,6 +62,14 @@ const FILTER_KEYS = [
   "sort",
 ] as const;
 
+// SEC Form D allows an offering to be uncapped — target_raise comes back as
+// the literal string "Indefinite" rather than a number in that case, which
+// Number() turns into NaN.
+function formatOfferingAmount(value: string | number | null | undefined) {
+  if (value === "Indefinite") return "Indefinite";
+  return `$${Number(value || 0).toLocaleString()}`;
+}
+
 function getSecUrls(cik: number | string, accessionNumber: string) {
   if (!accessionNumber || !cik) return { indexUrl: "#", xmlUrl: "#" };
   const folderNum = accessionNumber.replace(/-/g, "");
@@ -191,14 +199,16 @@ export default async function SECDashboard({ searchParams }: PageProps) {
 
   return (
     <div className="max-w-7xl mx-auto p-4 font-sans text-black">
-      <header className="mb-6 border-b-4 border-black pb-4 flex justify-between items-end">
+      <header className="mb-6 border-b-4 border-white pb-4 flex justify-between items-end">
         <div>
-          <h1 className="text-3xl font-black tracking-tight uppercase">
+          <h1 className="text-3xl font-black tracking-tight uppercase text-white">
             Intelligence Dashboard
           </h1>
-          <p className="text-base font-bold mt-1 text-white">My Computer</p>
+          <p className="text-base font-bold mt-1 text-white">
+            Mark Zuckerberg's Computer
+          </p>
         </div>
-        <div className="text-sm font-bold bg-[#10B981] px-4 py-2 border-2 border-black uppercase tracking-wide">
+        <div className="text-sm font-bold bg-[#2596BE] text-white px-4 py-2 border-2 border-black uppercase tracking-wide">
           Results: {count || 0}
         </div>
       </header>
@@ -211,7 +221,7 @@ export default async function SECDashboard({ searchParams }: PageProps) {
       <div className="overflow-x-auto border-2 border-black bg-white">
         <table className="w-full text-left border-collapse text-sm">
           <thead>
-            <tr className="bg-[#10B981] border-b-2 border-black text-black font-black uppercase tracking-tight">
+            <tr className="bg-[#2596BE] border-b-2 border-black text-white font-black uppercase tracking-tight">
               <th className="p-3 border-r-2 border-black">Company Name</th>
               <th className="p-3 border-r-2 border-black">CIK</th>
               <th className="p-3 border-r-2 border-black">Location</th>
@@ -238,7 +248,7 @@ export default async function SECDashboard({ searchParams }: PageProps) {
                 return (
                   <tr
                     key={company.issuer_id}
-                    className="hover:bg-[#10B981]/20 transition-none"
+                    className="hover:bg-[#2596BE]/20 transition-none"
                   >
                     <td className="p-3 border-r-2 border-black font-bold text-zinc-900 hover:underline">
                       <Link href={`/company/${company.ACCESSIONNUMBER}`}>
@@ -254,7 +264,7 @@ export default async function SECDashboard({ searchParams }: PageProps) {
                         : "N/A"}
                     </td>
                     <td className="p-3 border-r-2 border-black text-right font-mono">
-                      ${Number(company.target_raise || 0).toLocaleString()}
+                      {formatOfferingAmount(company.target_raise)}
                     </td>
                     <td className="p-3 border-r-2 border-black text-right font-mono">
                       ${Number(company.amount_sold || 0).toLocaleString()}
@@ -300,7 +310,7 @@ export default async function SECDashboard({ searchParams }: PageProps) {
       </div>
 
       <div className="flex items-center justify-between mt-6 text-base font-black uppercase tracking-wide">
-        <div>
+        <div className="text-white">
           Showing {from + 1} - {Math.min(to + 1, count || 0)}
         </div>
         <div className="flex gap-4">
@@ -309,7 +319,7 @@ export default async function SECDashboard({ searchParams }: PageProps) {
             className={`px-6 py-2 border-2 border-black text-black ${
               currentPage <= 1
                 ? "pointer-events-none bg-zinc-200 text-zinc-400"
-                : "bg-white hover:bg-[#10B981]"
+                : "bg-white hover:bg-[#2596BE]"
             }`}
           >
             Prev
@@ -319,7 +329,7 @@ export default async function SECDashboard({ searchParams }: PageProps) {
             className={`px-6 py-2 border-2 border-black text-black ${
               currentPage >= totalPages
                 ? "pointer-events-none bg-zinc-200 text-zinc-400"
-                : "bg-white hover:bg-[#10B981]"
+                : "bg-white hover:bg-[#2596BE]"
             }`}
           >
             Next

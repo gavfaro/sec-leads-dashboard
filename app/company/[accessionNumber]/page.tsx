@@ -10,6 +10,14 @@ interface ProfileProps {
   params: Promise<{ accessionNumber: string }>;
 }
 
+// SEC Form D allows an offering to be uncapped — TOTALOFFERINGAMOUNT and
+// TOTALREMAINING come back as the literal string "Indefinite" rather than a
+// number in that case, which Number() turns into NaN.
+function formatOfferingAmount(value: string | number | null | undefined) {
+  if (value === "Indefinite") return "Indefinite";
+  return `$${Number(value || 0).toLocaleString()}`;
+}
+
 export default async function CompanyProfile({ params }: ProfileProps) {
   const resolvedParams = await params;
   const { accessionNumber } = resolvedParams;
@@ -50,7 +58,7 @@ export default async function CompanyProfile({ params }: ProfileProps) {
       <div className="max-w-4xl mx-auto p-6 mt-12 border-2 border-black bg-zinc-100 font-bold uppercase text-black">
         Filing Profile Not Found for Accession: {accessionNumber}
         <div className="mt-4">
-          <Link href="/" className="underline text-[#10B981]">
+          <Link href="/" className="underline text-[#2596BE]">
             ← Back to Feed
           </Link>
         </div>
@@ -93,7 +101,7 @@ export default async function CompanyProfile({ params }: ProfileProps) {
       <nav className="mb-6">
         <Link
           href="/"
-          className="inline-block px-4 py-2 border-2 border-black font-bold uppercase text-xs tracking-wider bg-white hover:bg-[#10B981] transition-none"
+          className="inline-block px-4 py-2 border-2 border-black font-bold uppercase text-xs tracking-wider bg-white hover:bg-[#2596BE] transition-none"
         >
           ← Back to Lead Engine
         </Link>
@@ -103,7 +111,7 @@ export default async function CompanyProfile({ params }: ProfileProps) {
       <header className="mb-8 border-4 border-black p-6 bg-white shadow-none">
         <div className="flex justify-between items-start">
           <div>
-            <span className="text-xs font-black uppercase tracking-wider bg-[#10B981] px-2 py-0.5 border border-black">
+            <span className="text-xs font-black uppercase tracking-wider bg-[#2596BE] px-2 py-0.5 border border-black">
               {offering?.INDUSTRYGROUPTYPE || "General Technology"}
             </span>
             <h1 className="text-4xl font-black uppercase tracking-tight mt-2">
@@ -169,7 +177,7 @@ export default async function CompanyProfile({ params }: ProfileProps) {
 
         {/* Section 1: Financial Deal Metrics */}
         <section className="border-2 border-black bg-white">
-          <div className="bg-[#10B981] p-2 border-b-2 border-black font-black uppercase text-sm tracking-wide">
+          <div className="bg-[#2596BE] p-2 border-b-2 border-black font-black uppercase text-sm tracking-wide">
             Offering & Capital Structure
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 divide-y-2 md:divide-y-0 md:divide-x-2 divide-black text-left font-mono">
@@ -178,10 +186,10 @@ export default async function CompanyProfile({ params }: ProfileProps) {
                 Total Target Raise
               </span>
               <span className="text-lg font-black">
-                ${Number(offering?.TOTALOFFERINGAMOUNT || 0).toLocaleString()}
+                {formatOfferingAmount(offering?.TOTALOFFERINGAMOUNT)}
               </span>
             </div>
-            <div className="p-4 bg-[#10B981]/20">
+            <div className="p-4 bg-[#2596BE]/20">
               <span className="font-sans font-bold text-[10px] uppercase text-black block">
                 Total Amount Sold
               </span>
@@ -194,7 +202,7 @@ export default async function CompanyProfile({ params }: ProfileProps) {
                 Total Remaining
               </span>
               <span className="text-lg font-black">
-                ${Number(offering?.TOTALREMAINING || 0).toLocaleString()}
+                {formatOfferingAmount(offering?.TOTALREMAINING)}
               </span>
             </div>
             <div className="p-4">
@@ -229,7 +237,7 @@ export default async function CompanyProfile({ params }: ProfileProps) {
               </span>
             )}
             {offering?.ISPOOLEDINVESTMENTFUNDTYPE === "true" && (
-              <span className="border border-black px-2 py-0.5 bg-[#10B981]">
+              <span className="border border-black px-2 py-0.5 bg-[#2596BE]">
                 Pooled Fund
               </span>
             )}
@@ -324,7 +332,7 @@ export default async function CompanyProfile({ params }: ProfileProps) {
                         <span
                           className={`px-2 py-0.5 border-2 border-black uppercase font-bold text-[10px] ${
                             inv.confidence === "high"
-                              ? "bg-[#10B981]"
+                              ? "bg-[#2596BE]"
                               : inv.confidence === "medium"
                                 ? "bg-zinc-200"
                                 : "bg-white"
@@ -347,7 +355,7 @@ export default async function CompanyProfile({ params }: ProfileProps) {
                             href={inv.source_url}
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="underline text-[#10B981] break-all"
+                            className="underline text-[#2596BE] break-all"
                           >
                             {inv.source_url}
                           </a>
@@ -442,7 +450,7 @@ export default async function CompanyProfile({ params }: ProfileProps) {
 
         {/* Section 4: Related Persons (Founders & Leadership Team) */}
         <section className="border-2 border-black bg-white">
-          <div className="bg-[#10B981] p-2 border-b-2 border-black font-black uppercase text-sm tracking-wide">
+          <div className="bg-[#2596BE] p-2 border-b-2 border-black font-black uppercase text-sm tracking-wide">
             Management & Related Personnel ({relatedPersons.length})
           </div>
           <div className="overflow-x-auto">
@@ -511,7 +519,7 @@ export default async function CompanyProfile({ params }: ProfileProps) {
         <section className="border-2 border-black bg-white mb-12">
           <div className="bg-black text-white p-2 border-b-2 border-black font-black uppercase text-sm tracking-wide flex justify-between">
             <span>Filing History & Amendments</span>
-            <span className="text-[#10B981]">
+            <span className="text-[#2596BE]">
               {filingHistory?.length || 0} Total Records
             </span>
           </div>
@@ -535,7 +543,7 @@ export default async function CompanyProfile({ params }: ProfileProps) {
                   filingHistory.map((history: any) => (
                     <tr
                       key={history.ACCESSIONNUMBER}
-                      className={`text-black ${history.ACCESSIONNUMBER === accessionNumber ? "bg-[#10B981]/20" : "hover:bg-zinc-50 transition-none"}`}
+                      className={`text-black ${history.ACCESSIONNUMBER === accessionNumber ? "bg-[#2596BE]/20" : "hover:bg-zinc-50 transition-none"}`}
                     >
                       <td className="p-3 border-r-2 border-black font-mono text-xs">
                         {history.filing_date}
@@ -565,7 +573,7 @@ export default async function CompanyProfile({ params }: ProfileProps) {
                         ) : (
                           <Link
                             href={`/company/${history.ACCESSIONNUMBER}`}
-                            className="px-3 py-1 border-2 border-black bg-white hover:bg-[#10B981] uppercase text-[10px] tracking-wider font-black transition-none"
+                            className="px-3 py-1 border-2 border-black bg-white hover:bg-[#2596BE] uppercase text-[10px] tracking-wider font-black transition-none"
                           >
                             View Profile
                           </Link>

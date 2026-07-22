@@ -1,5 +1,6 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { signOut } from "@/app/actions/auth";
@@ -14,11 +15,16 @@ export default function Nav({ userEmail }: { userEmail: string | null }) {
   const pathname = usePathname();
 
   return (
-    <header className="bg-black sticky top-0 z-50 border-b-4 border-[#10B981]">
+    <header className="bg-white sticky top-0 z-50 border-b-4 border-[#2596BE]">
       <div className="max-w-7xl mx-auto px-4 h-12 flex items-center justify-between">
-        <span className="font-black text-xs tracking-[0.3em] uppercase text-[#10B981]">
-          Ellerra
-        </span>
+        <Image
+          src="/Ellerra_Logotype_Blue_RGB.png"
+          alt="Ellerra"
+          width={135}
+          height={40}
+          className="h-6 w-auto"
+          priority
+        />
         <nav className="flex h-full items-stretch">
           {userEmail &&
             TABS.map((tab) => {
@@ -33,8 +39,8 @@ export default function Nav({ userEmail }: { userEmail: string | null }) {
                   className={[
                     "flex items-center px-5 text-[11px] font-black uppercase tracking-widest border-b-4 -mb-1 transition-none",
                     active
-                      ? "text-[#10B981] border-[#10B981]"
-                      : "text-zinc-500 border-transparent hover:text-zinc-200",
+                      ? "text-[#2596BE] border-[#2596BE]"
+                      : "text-zinc-500 border-transparent hover:text-black",
                   ].join(" ")}
                 >
                   {tab.label}
@@ -51,7 +57,7 @@ export default function Nav({ userEmail }: { userEmail: string | null }) {
               <form action={signOut}>
                 <button
                   type="submit"
-                  className="text-[11px] font-black uppercase tracking-widest text-zinc-500 hover:text-[#10B981]"
+                  className="text-[11px] font-black uppercase tracking-widest text-zinc-500 hover:text-[#2596BE]"
                 >
                   Sign Out
                 </button>
@@ -63,13 +69,13 @@ export default function Nav({ userEmail }: { userEmail: string | null }) {
               <>
                 <Link
                   href="/login"
-                  className="text-[11px] font-black uppercase tracking-widest text-zinc-500 hover:text-zinc-200"
+                  className="text-[11px] font-black uppercase tracking-widest text-zinc-500 hover:text-black"
                 >
                   Sign In
                 </Link>
                 <Link
                   href="/signup"
-                  className="text-[11px] font-black uppercase tracking-widest text-[#10B981] hover:text-white"
+                  className="text-[11px] font-black uppercase tracking-widest text-[#2596BE] hover:text-black"
                 >
                   Sign Up
                 </Link>

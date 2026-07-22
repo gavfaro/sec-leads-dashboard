@@ -60,7 +60,7 @@ function ScoreBar({ label, value }: { label: string; value: number }) {
       </span>
       <div className="flex-1 h-2 bg-zinc-100 border border-black">
         <div
-          className="h-full bg-[#10B981]"
+          className="h-full bg-[#2596BE]"
           style={{ width: `${Math.max(0, Math.min(1, value)) * 100}%` }}
         />
       </div>
@@ -101,7 +101,7 @@ function RunDetail({
       <div className="flex justify-between items-center">
         <button
           onClick={onBack}
-          className="inline-block px-4 py-2 border-2 border-black font-bold uppercase text-xs tracking-wider bg-white hover:bg-[#10B981] transition-none"
+          className="inline-block px-4 py-2 border-2 border-black font-bold uppercase text-xs tracking-wider bg-white hover:bg-[#2596BE] transition-none"
         >
           ← All Matches
         </button>
@@ -120,7 +120,7 @@ function RunDetail({
         </h2>
         <div className="flex flex-wrap gap-2 mt-3">
           {run.stage && (
-            <span className="text-[9px] font-black uppercase tracking-wider bg-[#10B981] px-2 py-0.5 border border-black">
+            <span className="text-[9px] font-black uppercase tracking-wider bg-[#2596BE] px-2 py-0.5 border border-black">
               {run.stage}
             </span>
           )}
@@ -165,7 +165,7 @@ function RunDetail({
                     </span>
                     <button
                       onClick={() => setSelectedContact(r)}
-                      className="block text-left font-black uppercase text-sm tracking-tight leading-tight hover:text-[#10B981] transition-none"
+                      className="block text-left font-black uppercase text-sm tracking-tight leading-tight hover:text-[#2596BE] transition-none"
                     >
                       {r.firstName} {r.lastName}
                     </button>
@@ -176,14 +176,14 @@ function RunDetail({
                     )}
                     <a
                       href={`/investors/${r.orgId}`}
-                      className="block text-[10px] font-bold uppercase text-zinc-500 hover:text-[#10B981] transition-none"
+                      className="block text-[10px] font-bold uppercase text-zinc-500 hover:text-[#2596BE] transition-none"
                     >
                       {r.orgName}
                     </a>
                   </div>
                   <div className="flex flex-col items-end gap-1 flex-shrink-0">
                     <div className="text-right">
-                      <span className="font-mono font-black text-2xl tabular-nums text-[#10B981] block leading-none">
+                      <span className="font-mono font-black text-2xl tabular-nums text-[#2596BE] block leading-none">
                         {r.score.toFixed(2)}
                       </span>
                       <span className="text-[9px] font-black uppercase tracking-wider text-zinc-400">
@@ -195,7 +195,7 @@ function RunDetail({
                         href={r.linkedinUrl}
                         target="_blank"
                         rel="noopener noreferrer"
-                        className="p-1.5 border-2 border-black hover:bg-[#10B981] hover:text-white transition-none"
+                        className="p-1.5 border-2 border-black hover:bg-[#2596BE] hover:text-white transition-none"
                         aria-label="LinkedIn"
                       >
                         <LinkedInIcon />
@@ -326,7 +326,7 @@ function NewMatchForm({
           onChange={(e) => setName(e.target.value)}
           required
           autoFocus
-          className="w-full border-2 border-black p-2 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#10B981]"
+          className="w-full border-2 border-black p-2 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#2596BE]"
         />
       </div>
 
@@ -338,7 +338,7 @@ function NewMatchForm({
           <select
             value={stage}
             onChange={(e) => setStage(e.target.value)}
-            className="w-full border-2 border-black p-2 text-sm font-sans bg-white focus:outline-none focus:ring-2 focus:ring-[#10B981]"
+            className="w-full border-2 border-black p-2 text-sm font-sans bg-white focus:outline-none focus:ring-2 focus:ring-[#2596BE]"
           >
             <option value="">—</option>
             {STAGE_OPTIONS.map((s) => (
@@ -358,7 +358,7 @@ function NewMatchForm({
             value={targetRaise}
             onChange={(e) => setTargetRaise(e.target.value)}
             placeholder="e.g. 5000000"
-            className="w-full border-2 border-black p-2 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#10B981]"
+            className="w-full border-2 border-black p-2 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#2596BE]"
           />
         </div>
       </div>
@@ -376,7 +376,7 @@ function NewMatchForm({
                 type="button"
                 onClick={() => toggleVertical(v)}
                 title="Click to remove"
-                className="text-[10px] font-bold border-2 border-black px-2 py-1 bg-[#10B981] hover:bg-red-500 hover:text-white transition-none"
+                className="text-[10px] font-bold border-2 border-black px-2 py-1 bg-[#2596BE] hover:bg-red-500 hover:text-white transition-none"
               >
                 {v} ✕
               </button>
@@ -391,7 +391,7 @@ function NewMatchForm({
             onChange={(e) => setCustomVertical(e.target.value)}
             onKeyDown={handleCustomVerticalKeyDown}
             placeholder="Type a vertical and press Enter…"
-            className="flex-1 border-2 border-black p-2 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#10B981]"
+            className="flex-1 border-2 border-black p-2 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#2596BE]"
           />
           <button
             type="button"
@@ -429,7 +429,7 @@ function NewMatchForm({
           value={location}
           onChange={(e) => setLocation(e.target.value)}
           placeholder="e.g. San Francisco, CA"
-          className="w-full border-2 border-black p-2 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#10B981]"
+          className="w-full border-2 border-black p-2 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#2596BE]"
         />
       </div>
 
@@ -442,7 +442,7 @@ function NewMatchForm({
           onChange={(e) => setDescription(e.target.value)}
           rows={3}
           placeholder="What does the startup do?"
-          className="w-full border-2 border-black p-2 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#10B981]"
+          className="w-full border-2 border-black p-2 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#2596BE]"
         />
       </div>
 
@@ -455,7 +455,7 @@ function NewMatchForm({
       <button
         type="submit"
         disabled={submitting || !name.trim()}
-        className="px-5 py-2 border-2 border-black font-black text-xs uppercase tracking-widest bg-[#10B981] hover:bg-black hover:text-white transition-none disabled:opacity-50 disabled:cursor-not-allowed"
+        className="px-5 py-2 border-2 border-black font-black text-xs uppercase tracking-widest bg-[#2596BE] hover:bg-black hover:text-white transition-none disabled:opacity-50 disabled:cursor-not-allowed"
       >
         {submitting ? "Matching…" : "Run Match"}
       </button>
@@ -524,7 +524,7 @@ export default function MatchingEngine({
     <div className="space-y-6">
       <button
         onClick={() => setShowForm(true)}
-        className="px-5 py-2 border-2 border-black font-black text-xs uppercase tracking-widest bg-[#10B981] hover:bg-black hover:text-white transition-none"
+        className="px-5 py-2 border-2 border-black font-black text-xs uppercase tracking-widest bg-[#2596BE] hover:bg-black hover:text-white transition-none"
       >
         + New Match
       </button>
@@ -560,7 +560,7 @@ export default function MatchingEngine({
                   <td className="p-3 border-r-2 border-black font-black uppercase text-xs tracking-tight">
                     <button
                       onClick={() => setSelectedRunId(run.id)}
-                      className="hover:text-[#10B981] transition-none text-left"
+                      className="hover:text-[#2596BE] transition-none text-left"
                     >
                       {run.startupName}
                     </button>

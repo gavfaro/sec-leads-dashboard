@@ -86,7 +86,7 @@ export function CompanyModal({
             className={[
               "text-[9px] font-black uppercase tracking-wider border px-2 py-0.5 inline-block mt-2",
               isCurrent
-                ? "bg-[#10B981]/20 border-[#10B981]"
+                ? "bg-[#2596BE]/20 border-[#2596BE]"
                 : "bg-zinc-100 border-zinc-300 text-zinc-500",
             ].join(" ")}
           >
@@ -94,7 +94,7 @@ export function CompanyModal({
           </span>
         </div>
         {company.description ? (
-          <p className="text-sm leading-relaxed text-zinc-700 font-sans border-l-4 border-[#10B981] pl-4">
+          <p className="text-sm leading-relaxed text-zinc-700 font-sans border-l-4 border-[#2596BE] pl-4">
             {company.description}
           </p>
         ) : (
@@ -153,7 +153,7 @@ export function PartnerModal({
               href={partner.linkedin_url}
               target="_blank"
               rel="noopener noreferrer"
-              className="flex-shrink-0 flex items-center gap-2 px-3 py-2 border-2 border-black bg-white hover:bg-[#10B981] font-bold text-xs uppercase tracking-wide transition-none"
+              className="flex-shrink-0 flex items-center gap-2 px-3 py-2 border-2 border-black bg-white hover:bg-[#2596BE] font-bold text-xs uppercase tracking-wide transition-none"
             >
               <LinkedInIcon />
               LinkedIn
@@ -163,7 +163,7 @@ export function PartnerModal({
 
         {/* Full bio */}
         {partner.bio && (
-          <div className="border-l-4 border-[#10B981] pl-4">
+          <div className="border-l-4 border-[#2596BE] pl-4">
             <p className="text-sm leading-relaxed text-zinc-700 font-sans">{partner.bio}</p>
           </div>
         )}
@@ -182,7 +182,7 @@ export function PartnerModal({
                 <button
                   key={co.id}
                   onClick={() => setSelectedCompany({ company: co, relationship: "current" })}
-                  className="text-[10px] font-bold border border-black px-2 py-0.5 bg-white hover:bg-[#10B981]/20 transition-none"
+                  className="text-[10px] font-bold border border-black px-2 py-0.5 bg-white hover:bg-[#2596BE]/20 transition-none"
                 >
                   {co.name}
                 </button>

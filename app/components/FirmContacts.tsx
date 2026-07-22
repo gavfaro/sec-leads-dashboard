@@ -63,7 +63,7 @@ export default function FirmContacts({
                     )}
                     <button
                       onClick={() => setSelectedPartner(contact)}
-                      className="block text-left text-base font-black uppercase tracking-tight leading-tight hover:text-[#10B981] transition-none"
+                      className="block text-left text-base font-black uppercase tracking-tight leading-tight hover:text-[#2596BE] transition-none"
                     >
                       {contact.first_name} {contact.last_name}
                     </button>
@@ -73,7 +73,7 @@ export default function FirmContacts({
                       href={contact.linkedin_url}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="flex-shrink-0 p-1.5 border-2 border-black bg-white hover:bg-[#10B981] hover:text-white transition-none"
+                      className="flex-shrink-0 p-1.5 border-2 border-black bg-white hover:bg-[#2596BE] hover:text-white transition-none"
                       aria-label="LinkedIn profile"
                     >
                       <LinkedInIcon />
@@ -102,7 +102,7 @@ export default function FirmContacts({
                           onClick={() =>
                             setSelectedCompany({ company: co, relationship: "current" })
                           }
-                          className="text-[10px] font-bold border border-black px-2 py-0.5 bg-white hover:bg-[#10B981]/20 transition-none"
+                          className="text-[10px] font-bold border border-black px-2 py-0.5 bg-white hover:bg-[#2596BE]/20 transition-none"
                         >
                           {co.name}
                         </button>

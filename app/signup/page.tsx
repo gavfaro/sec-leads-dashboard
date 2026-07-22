@@ -1,11 +1,12 @@
 "use client";
 
+import Image from "next/image";
 import Link from "next/link";
 import { useActionState } from "react";
 import { signUp, type AuthFormState } from "@/app/actions/auth";
 
 const inputClass =
-  "border-2 border-black p-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[#10B981] bg-white text-black";
+  "border-2 border-black p-2 font-mono text-sm focus:outline-none focus:ring-2 focus:ring-[#2596BE] bg-white text-black";
 
 export default function SignupPage() {
   const [state, action, pending] = useActionState<AuthFormState, FormData>(
@@ -14,8 +15,9 @@ export default function SignupPage() {
   );
 
   return (
-    <div className="max-w-sm mx-auto mt-24 px-4 w-full">
-      <h1 className="text-xs font-black uppercase tracking-widest bg-black text-white px-2 py-1 mb-6">
+    <>
+      <div className="max-w-sm mx-auto mt-24 px-4 w-full">
+      <h1 className="text-xs font-black uppercase tracking-widest px-2 py-1 mb-6">
         Create Account
       </h1>
       <form action={action} className="flex flex-col gap-4">
@@ -51,6 +53,14 @@ export default function SignupPage() {
           Sign in
         </Link>
       </p>
-    </div>
+      </div>
+      <Image
+        src="/Ellerra_Powerpoint_Pattern_Title.png"
+        alt=""
+        width={3999}
+        height={2250}
+        className="w-full h-80 mt-24 object-cover object-top pointer-events-none select-none"
+      />
+    </>
   );
 }

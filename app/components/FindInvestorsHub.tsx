@@ -24,7 +24,7 @@ export default function FindInvestorsHub({
           onClick={() => setMode("fuzzy")}
           className={[
             "px-5 py-2 text-xs font-black uppercase tracking-widest transition-none",
-            mode === "fuzzy" ? "bg-[#10B981] text-black" : "hover:bg-zinc-100",
+            mode === "fuzzy" ? "bg-[#2596BE] text-black" : "hover:bg-zinc-100",
           ].join(" ")}
         >
           Fuzzy Search
@@ -33,7 +33,7 @@ export default function FindInvestorsHub({
           onClick={() => setMode("match")}
           className={[
             "px-5 py-2 text-xs font-black uppercase tracking-widest border-l-2 border-black transition-none",
-            mode === "match" ? "bg-[#10B981] text-black" : "hover:bg-zinc-100",
+            mode === "match" ? "bg-[#2596BE] text-black" : "hover:bg-zinc-100",
           ].join(" ")}
         >
           Matching Engine
