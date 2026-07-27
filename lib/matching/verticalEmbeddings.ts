@@ -1,5 +1,5 @@
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { embedText } from "./embeddings";
+import { cosineSimilarity, embedText } from "./embeddings";
 
 // Cap on concurrent embedding calls when warming a cold cache (e.g. the first
 // time a brand-new firm's tags show up) -- keeps us from bursting past Gemini's
@@ -64,4 +64,42 @@ export async function getOrCreateEmbeddings(
   }
 
   return result;
+}
+
+// Every vertical tag's embedding is already cached (see scripts/embed_local.py),
+// and there are only ~270 of them -- cheap to pull in full for a company-vertical
+// inference lookup rather than filtering by a specific tag list.
+export async function fetchAllVerticalTagEmbeddings(
+  sb: SupabaseClient,
+): Promise<Map<string, number[]>> {
+  const { data, error } = await sb.from("vertical_tag_embeddings").select("tag, embedding");
+  if (error) throw new Error(error.message);
+  const result = new Map<string, number[]>();
+  for (const row of data ?? []) {
+    result.set(row.tag, row.embedding as number[]);
+  }
+  return result;
+}
+
+export interface InferredVertical {
+  tag: string;
+  score: number;
+}
+
+// Companies have no structured vertical tags at all (no company_verticals table
+// exists), so this infers them the same way the rest of the matching engine
+// handles fragmented/missing tags: nearest neighbors in embedding space, not a
+// hand-maintained keyword list. Used to show "what sector is this company in"
+// on the company description popup.
+export function nearestVerticalTags(
+  companyEmbedding: number[],
+  tagEmbeddings: Map<string, number[]>,
+  topN = 5,
+): InferredVertical[] {
+  const scored: InferredVertical[] = [];
+  for (const [tag, vec] of tagEmbeddings) {
+    scored.push({ tag, score: cosineSimilarity(companyEmbedding, vec) });
+  }
+  scored.sort((a, b) => b.score - a.score);
+  return scored.slice(0, topN);
 }

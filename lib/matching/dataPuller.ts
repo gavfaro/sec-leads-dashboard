@@ -50,7 +50,7 @@ export async function fetchInvestorData(sb: SupabaseClient): Promise<Contact[]> 
       "id, first_name, last_name, role, linkedin_url, bio, org_id, typical_check_size, " +
         "organizations(name), " +
         "contact_verticals(verticals(vertical_name)), " +
-        "contact_investments(relationship, company_id, companies(name, description))",
+        "contact_investments(relationship, company_id, companies(name, description, website))",
     );
   if (contactsRes.error) throw new Error(contactsRes.error.message);
 
@@ -60,11 +60,15 @@ export async function fetchInvestorData(sb: SupabaseClient): Promise<Contact[]> 
     const org = one<{ name: string }>(c.organizations);
 
     const investments = (c.contact_investments ?? []).map((ci: any) => {
-      const company = one<{ name: string; description: string | null }>(ci.companies);
+      const company = one<{ name: string; description: string | null; website: string | null }>(
+        ci.companies,
+      );
       const borrowed = stageByOrgCompany.get(`${orgId}:${ci.company_id}`);
       return {
+        company_id: ci.company_id ?? null,
         company_name: company?.name ?? null,
         description: company?.description ?? null,
+        website: company?.website ?? null,
         relationship: ci.relationship ?? null,
         investment_stage: borrowed?.investment_stage ?? null,
         year_partnered: borrowed?.year_partnered ?? null,
