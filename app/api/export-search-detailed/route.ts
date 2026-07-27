@@ -193,6 +193,13 @@ export async function GET(req: NextRequest) {
   const filters = Object.fromEntries(searchParams.entries());
   const { column: sortColumn, ascending: sortAscending } = getFundraisingSort(filters.sort);
 
+  // "exportName" (not "name") — lib/fundraisingSearch.ts's FILTER_KEYS
+  // already uses "name" for the Company Name filter, so reusing it here
+  // would silently collide with that filter's value.
+  const { exportName: rawExportName, ...storedFilters } = filters;
+  const exportName =
+    rawExportName?.trim() || `SEC Leads Export - ${new Date().toISOString().slice(0, 10)}`;
+
   const companyQuery = buildFundraisingQuery(supabase, COMPANY_COLUMNS, filters);
   const { data: companies, error: companiesError } = await companyQuery
     .order(sortColumn, { ascending: sortAscending, nullsFirst: false })
@@ -378,9 +385,41 @@ export async function GET(req: NextRequest) {
   }
 
   const buffer = await wb.xlsx.writeBuffer();
-  const fileName = `sec-leads-detailed-export-${new Date().toISOString().slice(0, 10)}.xlsx`;
+  const fileBuffer = Buffer.from(buffer);
+  // Same sanitization as /api/exports/[id]/download, so the file name is
+  // identical whether it's downloaded now or redownloaded later from /exports.
+  const fileName = `${exportName.replace(/[^\w.\- ]/g, "_")}.xlsx`;
 
-  return new NextResponse(Buffer.from(buffer), {
+  // Best-effort: save the file + a history row so it shows up under
+  // /exports, but a failure here must never block the download the user is
+  // actively waiting on.
+  try {
+    const exportId = crypto.randomUUID();
+    const storagePath = `${user.id}/${exportId}.xlsx`;
+
+    const { error: uploadError } = await supabase.storage
+      .from("exports")
+      .upload(storagePath, fileBuffer, {
+        contentType: "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        upsert: false,
+      });
+    if (uploadError) throw uploadError;
+
+    const { error: insertError } = await supabase.from("export_history").insert({
+      id: exportId,
+      user_id: user.id,
+      name: exportName,
+      filters: storedFilters,
+      row_count: rows.length,
+      storage_path: storagePath,
+      file_size: fileBuffer.byteLength,
+    });
+    if (insertError) throw insertError;
+  } catch (err) {
+    console.error("Failed to save export history:", err);
+  }
+
+  return new NextResponse(fileBuffer, {
     headers: {
       "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
       "Content-Disposition": `attachment; filename="${fileName}"`,

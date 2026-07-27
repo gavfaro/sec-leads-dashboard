@@ -2,6 +2,7 @@ import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import FilterForm from "./components/FilterForm"; // Import our new Client Component
 import NewestLeads from "./components/NewestLeads";
+import ExportDetailedButton from "./components/ExportDetailedButton";
 import {
   FILTER_KEYS,
   buildFundraisingQuery,
@@ -145,13 +146,7 @@ export default async function SECDashboard({ searchParams }: PageProps) {
       <div className="flex justify-between items-center mb-4">
         {hasActiveFilters ? (
           <div className="flex gap-2">
-            <a
-              href={`/api/export-search-detailed?${filterParams.toString()}`}
-              title="Includes related persons, discovered investors, and filing history for every matching company"
-              className="text-sm font-black bg-white text-black px-4 py-2 border-2 border-black uppercase tracking-wide hover:bg-[#2596BE] transition-none"
-            >
-              Export Detailed (XLSX)
-            </a>
+            <ExportDetailedButton filterParams={filterParams.toString()} />
           </div>
         ) : (
           <div />

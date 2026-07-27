@@ -9,6 +9,7 @@ const TABS = [
   { href: "/", label: "SEC Leads" },
   { href: "/investors", label: "Investors" },
   { href: "/find-investors", label: "Find Investors" },
+  { href: "/exports", label: "Exports" },
 ];
 
 export default function Nav({ userEmail }: { userEmail: string | null }) {
