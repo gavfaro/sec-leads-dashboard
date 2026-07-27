@@ -25,7 +25,13 @@ function chunk<T>(arr: T[], size: number): T[][] {
 
 async function fetchChunked<Row>(
   ids: Array<string | number>,
-  run: (idsChunk: Array<string | number>) => Promise<{ data: Row[] | null; error: { message: string } | null }>,
+  // PromiseLike, not Promise: supabase-js query builders (e.g. the chained
+  // .select().in() below) are thenable but aren't real Promise instances —
+  // they don't have .catch/.finally, so Promise<...> rejects them at the
+  // type level even though `await` and Promise.all both handle them fine.
+  run: (
+    idsChunk: Array<string | number>,
+  ) => PromiseLike<{ data: Row[] | null; error: { message: string } | null }>,
 ): Promise<Row[]> {
   if (ids.length === 0) return [];
   const results = await Promise.all(chunk(ids, CHUNK_SIZE).map(run));
