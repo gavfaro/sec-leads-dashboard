@@ -1,11 +1,12 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 export interface Company {
   id: string;
   name: string;
   description: string | null;
+  website?: string | null;
 }
 
 export interface ContactInvestment {
@@ -26,6 +27,14 @@ export interface ContactWithInvestments {
   linkedin_url: string | null;
   bio: string | null;
   contact_investments: ContactInvestment[];
+}
+
+export interface SimilarCompany {
+  companyId: string;
+  companyName: string;
+  description: string | null;
+  website: string | null;
+  score: number;
 }
 
 export function LinkedInIcon() {
@@ -66,6 +75,17 @@ export function ModalHeader({ title, onClose }: { title: string; onClose: () => 
   );
 }
 
+interface InferredVertical {
+  tag: string;
+  score: number;
+}
+
+// Module-level, not component state: a company's inferred verticals don't
+// change within a session, so once fetched they're reused for the rest of the
+// page's lifetime instead of re-fetching (and re-showing a loading flash) every
+// time the same company's popup is reopened. Cleared naturally on page reload.
+const verticalsCache = new Map<string, InferredVertical[]>();
+
 export function CompanyModal({
   company,
   relationship,
@@ -76,6 +96,42 @@ export function CompanyModal({
   onClose: () => void;
 }) {
   const isCurrent = relationship === "current";
+  const cached = verticalsCache.get(company.id);
+  const [verticals, setVerticals] = useState<InferredVertical[]>(cached ?? []);
+  const [loadingVerticals, setLoadingVerticals] = useState(cached === undefined);
+
+  // Companies have no structured vertical tags in the DB -- these are inferred
+  // from the company's cached description embedding (nearest cached vertical
+  // tags) via a quick lookup, not a live embedding call -- but still a network
+  // round trip, so skip it entirely once cached for this company.
+  useEffect(() => {
+    const alreadyCached = verticalsCache.get(company.id);
+    if (alreadyCached) {
+      setVerticals(alreadyCached);
+      setLoadingVerticals(false);
+      return;
+    }
+
+    let cancelled = false;
+    setLoadingVerticals(true);
+    fetch(`/api/company-verticals?companyId=${encodeURIComponent(company.id)}`)
+      .then((res) => res.json())
+      .then((data) => {
+        const result: InferredVertical[] = data.verticals ?? [];
+        verticalsCache.set(company.id, result);
+        if (!cancelled) setVerticals(result);
+      })
+      .catch(() => {
+        if (!cancelled) setVerticals([]);
+      })
+      .finally(() => {
+        if (!cancelled) setLoadingVerticals(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [company.id]);
+
   return (
     <Overlay onClose={onClose}>
       <ModalHeader title={company.name} onClose={onClose} />
@@ -92,7 +148,45 @@ export function CompanyModal({
           >
             {isCurrent ? "Active Investment" : "Enduring / Exited"}
           </span>
+          {company.website && (
+            <a
+              href={company.website}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="block text-xs font-bold text-[#2596BE] hover:underline mt-2"
+            >
+              {company.website}
+            </a>
+          )}
         </div>
+
+        <div>
+          <p className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-1.5">
+            Verticals
+          </p>
+          {loadingVerticals ? (
+            <p className="text-[10px] font-bold text-zinc-300 uppercase tracking-wide">
+              Loading…
+            </p>
+          ) : verticals.length > 0 ? (
+            <div className="flex flex-wrap gap-1.5">
+              {verticals.map((v) => (
+                <span
+                  key={v.tag}
+                  title={`Similarity ${v.score.toFixed(2)}`}
+                  className="text-[9px] font-black uppercase tracking-wider border border-black px-2 py-0.5 bg-zinc-100"
+                >
+                  {v.tag}
+                </span>
+              ))}
+            </div>
+          ) : (
+            <p className="text-xs font-bold text-zinc-400 uppercase tracking-wide">
+              No verticals inferred.
+            </p>
+          )}
+        </div>
+
         {company.description ? (
           <p className="text-sm leading-relaxed text-zinc-700 font-sans border-l-4 border-[#2596BE] pl-4">
             {company.description}
@@ -110,9 +204,13 @@ export function CompanyModal({
 export function PartnerModal({
   partner,
   onClose,
+  similarCompanies,
+  bioSimilarity,
 }: {
   partner: ContactWithInvestments;
   onClose: () => void;
+  similarCompanies?: SimilarCompany[];
+  bioSimilarity?: number | null;
 }) {
   const investments = partner.contact_investments ?? [];
   const current = investments
@@ -164,7 +262,47 @@ export function PartnerModal({
         {/* Full bio */}
         {partner.bio && (
           <div className="border-l-4 border-[#2596BE] pl-4">
+            {bioSimilarity != null && (
+              <span className="text-[9px] font-black uppercase tracking-wider bg-[#2596BE]/20 border border-[#2596BE] px-2 py-0.5 inline-block mb-2">
+                Bio Matches Startup · {bioSimilarity.toFixed(2)}
+              </span>
+            )}
             <p className="text-sm leading-relaxed text-zinc-700 font-sans">{partner.bio}</p>
+          </div>
+        )}
+
+        {/* Similar companies -- from the active match run's startup description,
+            not the contact's own data, so this section only appears when the
+            modal is opened from the Matching Engine. */}
+        {similarCompanies && similarCompanies.length > 0 && (
+          <div>
+            <div className="text-[9px] font-black uppercase tracking-widest text-zinc-400 mb-2 flex items-center gap-2">
+              <span>Similar Companies</span>
+              <span className="font-mono bg-zinc-100 border border-zinc-300 px-1.5">
+                {similarCompanies.length}
+              </span>
+            </div>
+            <div className="border-2 border-black divide-y divide-zinc-200">
+              {similarCompanies.map((sc) => (
+                <button
+                  key={sc.companyId}
+                  onClick={() =>
+                    setSelectedCompany({
+                      company: { id: sc.companyId, name: sc.companyName, description: sc.description },
+                      relationship: current.some((co) => co.id === sc.companyId) ? "current" : "previous",
+                    })
+                  }
+                  className="w-full flex justify-between items-center px-3 py-1.5 gap-4 hover:bg-[#2596BE]/20 transition-none"
+                >
+                  <span className="font-bold uppercase text-xs tracking-tight truncate">
+                    {sc.companyName}
+                  </span>
+                  <span className="font-mono font-black text-sm tabular-nums text-[#2596BE] flex-shrink-0">
+                    {sc.score.toFixed(2)}
+                  </span>
+                </button>
+              ))}
+            </div>
           </div>
         )}
 

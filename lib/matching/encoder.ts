@@ -1,7 +1,5 @@
 // Ported from math_engine/investor_encoder.py's ContactFeatureEncoder.
-import { TfidfIndex } from "./tfidf";
 import { normalizeStage, recencyWeight } from "./stage";
-import { textVerticalWeights } from "./vertical";
 import type { Contact } from "./types";
 
 // Rough industry-standard check sizes per stage, used only as a last-resort proxy
@@ -29,8 +27,10 @@ function normalize(counts: Record<string, number>): Record<string, number> {
 
 // Bio plus personal deal descriptions -- current investments count double, since a
 // partner's active book of business says more about what they're doing now than
-// deals from before an exit or role change.
-function personalText(contact: Contact): string {
+// deals from before an exit or role change. Exported so matcher.ts's embedding-
+// based vertical fallback (see computeVerticalFits) can embed the same text this
+// used to run through a fixed keyword table.
+export function personalText(contact: Contact): string {
   const parts: string[] = [contact.bio ?? ""];
   for (const inv of contact.investments) {
     const desc = inv.description ?? "";
@@ -41,18 +41,18 @@ function personalText(contact: Contact): string {
   return parts.filter(Boolean).join(" ");
 }
 
-export class ContactFeatureEncoder {
-  private tfidf: TfidfIndex;
-
-  constructor(private contacts: Contact[]) {
-    this.tfidf = new TfidfIndex(contacts.map(personalText));
-  }
-
-  // Vertical name -> weight, normalized to sum to 1. Prefers the contact's own
-  // contact_verticals tags; falls back to their firm's vertical_focus, then to
-  // keyword inference from bio + portfolio text when neither structured source
-  // has any tags.
-  verticalWeights(contact: Contact): Record<string, number> {
+// Every method here is a pure function of a single contact -- there's no shared
+// state to fit across the whole contact list (unlike the old TF-IDF corpus this
+// used to hold), so this stays a plain object rather than a class with a
+// constructor.
+export const ContactFeatureEncoder = {
+  // Vertical name -> weight, normalized to sum to 1, from the contact's own
+  // contact_verticals tags, falling back to their firm's vertical_focus. Returns
+  // null if neither structured source has any tags, signaling the caller
+  // (computeVerticalFits) to fall back to embedding-based inference over the
+  // contact's free text instead -- kept synchronous and DB-free so callers can
+  // cheaply tell up front which contacts actually need that fallback.
+  structuredVerticalWeights(contact: Contact): Record<string, number> | null {
     if (contact.contact_verticals.length > 0) {
       const counts: Record<string, number> = {};
       for (const v of contact.contact_verticals) counts[v] = (counts[v] ?? 0) + 1;
@@ -64,10 +64,8 @@ export class ContactFeatureEncoder {
       const vertical = vf.verticals?.vertical_name;
       if (vertical) orgCounts[vertical] = (orgCounts[vertical] ?? 0) + 1;
     }
-    if (sumValues(orgCounts) > 0) return normalize(orgCounts);
-
-    return textVerticalWeights(personalText(contact));
-  }
+    return sumValues(orgCounts) > 0 ? normalize(orgCounts) : null;
+  },
 
   // Normalized distribution over STAGE_VOCABULARY, built from the contact's own
   // personal deals (investment_stage borrowed from the firm's portfolio_investments
@@ -88,7 +86,7 @@ export class ContactFeatureEncoder {
       if (stage) orgCounts[stage] = (orgCounts[stage] ?? 0) + 1;
     }
     return normalize(orgCounts);
-  }
+  },
 
   // Priority: the contact's own manually-researched check size (e.g. entered after
   // looking them up on Crunchbase) -> their firm's vertical_focus average -> a
@@ -102,18 +100,9 @@ export class ContactFeatureEncoder {
       .filter((v): v is number => v != null && v > 0);
     if (sizes.length > 0) return sizes.reduce((a, b) => a + b, 0) / sizes.length;
 
-    const distribution = this.stageDistribution(contact);
+    const distribution = ContactFeatureEncoder.stageDistribution(contact);
     const entries = Object.entries(distribution);
     if (entries.length === 0) return null;
     return entries.reduce((sum, [stage, weight]) => sum + weight * (STAGE_CHECK_SIZE_PROXY[stage] ?? 0), 0);
-  }
-
-  // Cosine similarity between a startup's description and this contact's personal
-  // bio + deal-description corpus. 0 if either side has no usable text.
-  textSimilarity(contactIndex: number, startupDescription: string): number {
-    if (!this.tfidf.hasVocabulary() || !startupDescription.trim()) return 0;
-    const startupVec = this.tfidf.transformOne(startupDescription);
-    const contactVec = this.tfidf.getDocVector(contactIndex);
-    return TfidfIndex.cosineSimilarity(startupVec, contactVec);
-  }
-}
+  },
+};

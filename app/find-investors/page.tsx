@@ -35,7 +35,7 @@ export default async function FindInvestorsPage() {
       sb.from("verticals").select("vertical_name").order("vertical_name"),
       sbSession
         .from("match_runs")
-        .select("id, startup_name, startup_input, created_at")
+        .select("id, startup_name, startup_input, created_at, weights_used, similarity_threshold")
         .order("created_at", { ascending: false }),
       sbSession.from("match_results").select(MATCH_RESULT_SELECT).order("rank"),
     ]);

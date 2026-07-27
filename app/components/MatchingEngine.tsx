@@ -1,23 +1,40 @@
 "use client";
 
-import { useState } from "react";
+import { useMemo, useState } from "react";
 import {
   ContactInvestment,
   ContactWithInvestments,
   LinkedInIcon,
   PartnerModal,
+  SimilarCompany,
 } from "./PartnerModal";
+import ExportMatchButton from "./ExportMatchButton";
 
 // Mirrors math_engine/investor_encoder.py's STAGE_VOCABULARY -- not stored in the
 // database, so kept in sync by hand.
 const STAGE_OPTIONS = ["Pre-Seed", "Seed", "Series A", "Series B", "Series C+", "Growth"];
+
+// Mirrors lib/matching/matcher.ts's DEFAULT_WEIGHTS and companySimilarity.ts's
+// DEFAULT_SIMILARITY_THRESHOLD -- not imported directly since those live in
+// server-only matching code, so kept in sync by hand (same as STAGE_OPTIONS).
+const DEFAULT_MATCH_WEIGHTS: Record<"vertical" | "stage" | "check_size" | "text", number> = {
+  vertical: 0.3,
+  stage: 0.25,
+  check_size: 0.2,
+  text: 0.25,
+};
+const DEFAULT_SIMILARITY_THRESHOLD = 0.3;
 
 export interface ScoreBreakdown {
   vertical: number;
   stage: number;
   check_size: number;
   text: number;
+  similar_companies?: SimilarCompany[];
+  bio_similarity?: number | null;
 }
+
+type NumericBreakdownKey = "vertical" | "stage" | "check_size" | "text";
 
 export interface MatchResultEntry {
   contactId: string;
@@ -26,9 +43,16 @@ export interface MatchResultEntry {
   role: string | null;
   linkedinUrl: string | null;
   bio: string | null;
+  email: string | null;
+  twitter: string | null;
+  location: string | null;
+  accreditationVerified: boolean;
   investments: ContactInvestment[];
   orgId: string;
   orgName: string;
+  orgWebsite: string | null;
+  orgAum: number | null;
+  orgType: string | null;
   rank: number;
   score: number;
   scoreBreakdown: ScoreBreakdown;
@@ -42,17 +66,32 @@ export interface MatchRunEntry {
   targetRaise: number | null;
   description: string | null;
   createdAt: string | null;
+  weightsUsed: Record<string, number>;
+  similarityThreshold: number;
   results: MatchResultEntry[];
 }
 
-const BREAKDOWN_LABELS: Record<keyof ScoreBreakdown, string> = {
+const BREAKDOWN_LABELS: Record<NumericBreakdownKey, string> = {
   vertical: "Vertical",
   stage: "Stage",
   check_size: "Check Size",
   text: "Text",
 };
 
-function ScoreBar({ label, value }: { label: string; value: number }) {
+// The text score is a diminishing-returns squash of these companies' similarity
+// (see companySimilarity.ts's saturate()), so 5+ relevant companies is already
+// deep into that curve -- a bar fill past that point wouldn't add information.
+const SIMILAR_COMPANIES_BAR_CAP = 5;
+
+function ScoreBar({
+  label,
+  value,
+  displayValue,
+}: {
+  label: string;
+  value: number;
+  displayValue?: string;
+}) {
   return (
     <div className="flex items-center gap-2">
       <span className="text-[9px] font-black uppercase tracking-wider text-zinc-500 w-16 flex-shrink-0">
@@ -65,7 +104,7 @@ function ScoreBar({ label, value }: { label: string; value: number }) {
         />
       </div>
       <span className="text-[10px] font-mono font-black w-10 text-right tabular-nums">
-        {value.toFixed(2)}
+        {displayValue ?? value.toFixed(2)}
       </span>
     </div>
   );
@@ -83,6 +122,57 @@ function toContactWithInvestments(r: MatchResultEntry): ContactWithInvestments {
   };
 }
 
+// Rough proxy for "who to lead with" when several contacts tie exactly (see
+// below) -- not a real org chart, just enough to prefer a Partner over an
+// Associate when the underlying data can't otherwise tell them apart.
+function seniorityRank(role: string | null): number {
+  const r = (role ?? "").toLowerCase();
+  if (r.includes("founder") || r.includes("managing partner")) return 0;
+  if (r.includes("general partner") || /\bpartner\b/.test(r)) return 1;
+  if (r.includes("principal")) return 2;
+  if (r.includes("director") || r.includes("vice president") || /\bvp\b/.test(r)) return 3;
+  return 4;
+}
+
+interface ResultGroup {
+  key: string;
+  score: number;
+  scoreBreakdown: ScoreBreakdown;
+  members: MatchResultEntry[]; // best-first
+}
+
+// Firms that syndicate every deal across their whole team (Alumni Ventures is
+// the clearest case in our data) give every partner the exact same
+// contact_investments -- since every score component is a pure function of
+// that data (see encoder.ts), those partners get byte-identical scores and
+// flood the top of the list with what look like duplicate recommendations.
+// Grouping by (org, full score breakdown) collapses them into one slot without
+// hiding anyone -- every member is still individually clickable, since bios
+// (and thus which one is worth reaching out to first) still differ.
+function groupDuplicateProfiles(results: MatchResultEntry[]): ResultGroup[] {
+  const groups = new Map<string, MatchResultEntry[]>();
+  for (const r of results) {
+    const key = `${r.orgId}::${JSON.stringify(r.scoreBreakdown)}`;
+    if (!groups.has(key)) groups.set(key, []);
+    groups.get(key)!.push(r);
+  }
+
+  const result: ResultGroup[] = [...groups.entries()].map(([key, members]) => {
+    const sorted = [...members].sort((a, b) => {
+      const seniorityDiff = seniorityRank(a.role) - seniorityRank(b.role);
+      if (seniorityDiff !== 0) return seniorityDiff;
+      if (Boolean(a.linkedinUrl) !== Boolean(b.linkedinUrl)) {
+        return a.linkedinUrl ? -1 : 1;
+      }
+      return a.rank - b.rank;
+    });
+    return { key, score: sorted[0].score, scoreBreakdown: sorted[0].scoreBreakdown, members: sorted };
+  });
+
+  result.sort((a, b) => b.score - a.score);
+  return result;
+}
+
 function RunDetail({
   run,
   onBack,
@@ -95,6 +185,7 @@ function RunDetail({
   deleting: boolean;
 }) {
   const [selectedContact, setSelectedContact] = useState<MatchResultEntry | null>(null);
+  const groupedResults = useMemo(() => groupDuplicateProfiles(run.results), [run.results]);
 
   return (
     <div className="space-y-6">
@@ -105,13 +196,16 @@ function RunDetail({
         >
           ← All Matches
         </button>
-        <button
-          onClick={onDelete}
-          disabled={deleting}
-          className="px-4 py-2 border-2 border-black font-bold uppercase text-xs tracking-wider bg-white hover:bg-red-600 hover:text-white transition-none disabled:opacity-50 disabled:cursor-not-allowed"
-        >
-          {deleting ? "Deleting…" : "Delete Match"}
-        </button>
+        <div className="flex gap-2">
+          <ExportMatchButton run={run} />
+          <button
+            onClick={onDelete}
+            disabled={deleting}
+            className="px-4 py-2 border-2 border-black font-bold uppercase text-xs tracking-wider bg-white hover:bg-red-600 hover:text-white transition-none disabled:opacity-50 disabled:cursor-not-allowed"
+          >
+            {deleting ? "Deleting…" : "Delete Match"}
+          </button>
+        </div>
       </div>
 
       <div className="border-4 border-black p-6 bg-white">
@@ -141,6 +235,15 @@ function RunDetail({
         {run.description && (
           <p className="text-sm text-zinc-600 mt-4 max-w-3xl">{run.description}</p>
         )}
+        <div className="mt-4 pt-3 border-t border-zinc-200 flex flex-wrap gap-x-4 gap-y-1 text-[9px] font-bold uppercase tracking-wide text-zinc-400">
+          <span>
+            Weights: Vertical {Math.round((run.weightsUsed.vertical ?? 0) * 100)}% · Stage{" "}
+            {Math.round((run.weightsUsed.stage ?? 0) * 100)}% · Check Size{" "}
+            {Math.round((run.weightsUsed.check_size ?? 0) * 100)}% · Text{" "}
+            {Math.round((run.weightsUsed.text ?? 0) * 100)}%
+          </span>
+          <span>Similarity Threshold: {run.similarityThreshold.toFixed(2)}</span>
+        </div>
       </div>
 
       {run.results.length === 0 ? (
@@ -153,69 +256,102 @@ function RunDetail({
             Ranked Investors
           </h3>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {run.results.map((r) => (
-              <div
-                key={r.contactId}
-                className="border-2 border-black bg-white p-4 flex flex-col gap-3"
-              >
-                <div className="flex justify-between items-start gap-2">
-                  <div className="flex-1 min-w-0">
-                    <span className="text-[9px] font-black uppercase tracking-wider text-zinc-400">
-                      #{r.rank}
-                    </span>
-                    <button
-                      onClick={() => setSelectedContact(r)}
-                      className="block text-left font-black uppercase text-sm tracking-tight leading-tight hover:text-[#2596BE] transition-none"
-                    >
-                      {r.firstName} {r.lastName}
-                    </button>
-                    {r.role && (
-                      <span className="text-[9px] font-black uppercase tracking-wider border border-black px-1.5 py-0.5 bg-zinc-100 inline-block mt-1 mb-0.5">
-                        {r.role}
-                      </span>
-                    )}
-                    <a
-                      href={`/investors/${r.orgId}`}
-                      className="block text-[10px] font-bold uppercase text-zinc-500 hover:text-[#2596BE] transition-none"
-                    >
-                      {r.orgName}
-                    </a>
-                  </div>
-                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                    <div className="text-right">
-                      <span className="font-mono font-black text-2xl tabular-nums text-[#2596BE] block leading-none">
-                        {r.score.toFixed(2)}
-                      </span>
+            {groupedResults.map((group, i) => {
+              const r = group.members[0];
+              const others = group.members.slice(1);
+              return (
+                <div
+                  key={group.key}
+                  className="border-2 border-black bg-white p-4 flex flex-col gap-3"
+                >
+                  <div className="flex justify-between items-start gap-2">
+                    <div className="flex-1 min-w-0">
                       <span className="text-[9px] font-black uppercase tracking-wider text-zinc-400">
-                        Score
+                        #{i + 1}
                       </span>
-                    </div>
-                    {r.linkedinUrl && (
-                      <a
-                        href={r.linkedinUrl}
-                        target="_blank"
-                        rel="noopener noreferrer"
-                        className="p-1.5 border-2 border-black hover:bg-[#2596BE] hover:text-white transition-none"
-                        aria-label="LinkedIn"
+                      <button
+                        onClick={() => setSelectedContact(r)}
+                        className="block text-left font-black uppercase text-sm tracking-tight leading-tight hover:text-[#2596BE] transition-none"
                       >
-                        <LinkedInIcon />
+                        {r.firstName} {r.lastName}
+                      </button>
+                      {r.role && (
+                        <span className="text-[9px] font-black uppercase tracking-wider border border-black px-1.5 py-0.5 bg-zinc-100 inline-block mt-1 mb-0.5">
+                          {r.role}
+                        </span>
+                      )}
+                      <a
+                        href={`/investors/${r.orgId}`}
+                        className="block text-[10px] font-bold uppercase text-zinc-500 hover:text-[#2596BE] transition-none"
+                      >
+                        {r.orgName}
                       </a>
+                    </div>
+                    <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                      <div className="text-right">
+                        <span className="font-mono font-black text-2xl tabular-nums text-[#2596BE] block leading-none">
+                          {r.score.toFixed(2)}
+                        </span>
+                        <span className="text-[9px] font-black uppercase tracking-wider text-zinc-400">
+                          Score
+                        </span>
+                      </div>
+                      {r.linkedinUrl && (
+                        <a
+                          href={r.linkedinUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="p-1.5 border-2 border-black hover:bg-[#2596BE] hover:text-white transition-none"
+                          aria-label="LinkedIn"
+                        >
+                          <LinkedInIcon />
+                        </a>
+                      )}
+                    </div>
+                  </div>
+
+                  {others.length > 0 && (
+                    <div className="border-t border-zinc-200 pt-2">
+                      <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-wide mb-1">
+                        Same profile also matches {others.length} more at {r.orgName}:
+                      </p>
+                      <div className="flex flex-wrap gap-1.5">
+                        {others.map((o) => (
+                          <button
+                            key={o.contactId}
+                            onClick={() => setSelectedContact(o)}
+                            title="View this contact's own bio"
+                            className="text-[10px] font-bold border border-zinc-300 px-2 py-0.5 bg-zinc-50 text-zinc-500 hover:bg-zinc-200 transition-none"
+                          >
+                            {o.firstName} {o.lastName}
+                          </button>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="border-t border-black pt-2 space-y-1.5">
+                    {(Object.keys(BREAKDOWN_LABELS) as NumericBreakdownKey[]).map(
+                      (key) => (
+                        <ScoreBar
+                          key={key}
+                          label={BREAKDOWN_LABELS[key]}
+                          value={group.scoreBreakdown?.[key] ?? 0}
+                        />
+                      ),
                     )}
+                    <ScoreBar
+                      label="Similar Cos"
+                      value={
+                        (group.scoreBreakdown?.similar_companies?.length ?? 0) /
+                        SIMILAR_COMPANIES_BAR_CAP
+                      }
+                      displayValue={String(group.scoreBreakdown?.similar_companies?.length ?? 0)}
+                    />
                   </div>
                 </div>
-                <div className="border-t border-black pt-2 space-y-1.5">
-                  {(Object.keys(BREAKDOWN_LABELS) as (keyof ScoreBreakdown)[]).map(
-                    (key) => (
-                      <ScoreBar
-                        key={key}
-                        label={BREAKDOWN_LABELS[key]}
-                        value={r.scoreBreakdown?.[key] ?? 0}
-                      />
-                    ),
-                  )}
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
@@ -224,6 +360,8 @@ function RunDetail({
         <PartnerModal
           partner={toContactWithInvestments(selectedContact)}
           onClose={() => setSelectedContact(null)}
+          similarCompanies={selectedContact.scoreBreakdown.similar_companies}
+          bioSimilarity={selectedContact.scoreBreakdown.bio_similarity}
         />
       )}
     </div>
@@ -249,11 +387,40 @@ function NewMatchForm({
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  const [showSettings, setShowSettings] = useState(false);
+  const [verticalWeight, setVerticalWeight] = useState(DEFAULT_MATCH_WEIGHTS.vertical);
+  const [stageWeight, setStageWeight] = useState(DEFAULT_MATCH_WEIGHTS.stage);
+  const [checkSizeWeight, setCheckSizeWeight] = useState(DEFAULT_MATCH_WEIGHTS.check_size);
+  const [textWeight, setTextWeight] = useState(DEFAULT_MATCH_WEIGHTS.text);
+  const [similarityThreshold, setSimilarityThreshold] = useState(DEFAULT_SIMILARITY_THRESHOLD);
+
+  function resetSettings() {
+    setVerticalWeight(DEFAULT_MATCH_WEIGHTS.vertical);
+    setStageWeight(DEFAULT_MATCH_WEIGHTS.stage);
+    setCheckSizeWeight(DEFAULT_MATCH_WEIGHTS.check_size);
+    setTextWeight(DEFAULT_MATCH_WEIGHTS.text);
+    setSimilarityThreshold(DEFAULT_SIMILARITY_THRESHOLD);
+  }
+
   function toggleVertical(v: string) {
     setSelectedVerticals((prev) =>
       prev.includes(v) ? prev.filter((x) => x !== v) : [...prev, v],
     );
   }
+
+  // The vertical vocabulary is scraped and highly fragmented (hundreds of tags --
+  // see lib/matching's vertical-embedding comments), so showing all of them as
+  // buttons at once is overwhelming. Cap the visible suggestions and reuse the
+  // "type a custom vertical" box to filter them down as well.
+  const VERTICAL_SUGGESTION_LIMIT = 12;
+  const availableVerticals = verticals.filter((v) => !selectedVerticals.includes(v));
+  const filteredVerticals = customVertical.trim()
+    ? availableVerticals.filter((v) =>
+        v.toLowerCase().includes(customVertical.trim().toLowerCase()),
+      )
+    : availableVerticals;
+  const visibleVerticals = filteredVerticals.slice(0, VERTICAL_SUGGESTION_LIMIT);
+  const hiddenVerticalCount = filteredVerticals.length - visibleVerticals.length;
 
   function addCustomVertical() {
     const v = customVertical.trim();
@@ -286,6 +453,13 @@ function NewMatchForm({
           targetRaise: targetRaise ? Number(targetRaise) : undefined,
           location: location.trim() || undefined,
           description: description.trim() || undefined,
+          weights: {
+            vertical: verticalWeight,
+            stage: stageWeight,
+            check_size: checkSizeWeight,
+            text: textWeight,
+          },
+          similarityThreshold,
         }),
       });
       const data = await res.json();
@@ -390,7 +564,7 @@ function NewMatchForm({
             value={customVertical}
             onChange={(e) => setCustomVertical(e.target.value)}
             onKeyDown={handleCustomVerticalKeyDown}
-            placeholder="Type a vertical and press Enter…"
+            placeholder="Filter or type a custom vertical and press Enter…"
             className="flex-1 border-2 border-black p-2 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#2596BE]"
           />
           <button
@@ -402,21 +576,24 @@ function NewMatchForm({
           </button>
         </div>
 
-        {verticals.filter((v) => !selectedVerticals.includes(v)).length > 0 && (
+        {visibleVerticals.length > 0 && (
           <div className="flex flex-wrap gap-2">
-            {verticals
-              .filter((v) => !selectedVerticals.includes(v))
-              .map((v) => (
-                <button
-                  key={v}
-                  type="button"
-                  onClick={() => toggleVertical(v)}
-                  className="text-[10px] font-bold border-2 border-black px-2 py-1 bg-white hover:bg-zinc-100 transition-none"
-                >
-                  + {v}
-                </button>
-              ))}
+            {visibleVerticals.map((v) => (
+              <button
+                key={v}
+                type="button"
+                onClick={() => toggleVertical(v)}
+                className="text-[10px] font-bold border-2 border-black px-2 py-1 bg-white hover:bg-zinc-100 transition-none"
+              >
+                + {v}
+              </button>
+            ))}
           </div>
+        )}
+        {hiddenVerticalCount > 0 && (
+          <p className="text-[10px] font-bold text-zinc-400 uppercase tracking-wide mt-1.5">
+            +{hiddenVerticalCount} more — keep typing above to narrow down
+          </p>
         )}
       </div>
 
@@ -444,6 +621,110 @@ function NewMatchForm({
           placeholder="What does the startup do?"
           className="w-full border-2 border-black p-2 text-sm font-sans focus:outline-none focus:ring-2 focus:ring-[#2596BE]"
         />
+      </div>
+
+      <div className="border-t-2 border-black pt-4">
+        <button
+          type="button"
+          onClick={() => setShowSettings((s) => !s)}
+          className="text-[9px] font-black uppercase tracking-widest text-zinc-500 hover:text-black transition-none"
+        >
+          {showSettings ? "▾" : "▸"} Match Settings (Advanced)
+        </button>
+
+        {showSettings && (
+          <div className="mt-3 space-y-4 border-2 border-black p-4 bg-zinc-50">
+            <div>
+              <p className="text-[9px] font-black uppercase tracking-widest text-zinc-500 mb-1">
+                Feature Weights
+              </p>
+              <p className="text-[10px] text-zinc-400 mb-2">
+                Relative importance of each signal — automatically normalized to sum to 100%.
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div>
+                  <label className="block text-[9px] font-black uppercase tracking-wider text-zinc-500 mb-1">
+                    Vertical
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.05"
+                    value={verticalWeight}
+                    onChange={(e) => setVerticalWeight(Number(e.target.value))}
+                    className="w-full border-2 border-black p-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#2596BE]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-black uppercase tracking-wider text-zinc-500 mb-1">
+                    Stage
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.05"
+                    value={stageWeight}
+                    onChange={(e) => setStageWeight(Number(e.target.value))}
+                    className="w-full border-2 border-black p-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#2596BE]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-black uppercase tracking-wider text-zinc-500 mb-1">
+                    Check Size
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.05"
+                    value={checkSizeWeight}
+                    onChange={(e) => setCheckSizeWeight(Number(e.target.value))}
+                    className="w-full border-2 border-black p-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#2596BE]"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[9px] font-black uppercase tracking-wider text-zinc-500 mb-1">
+                    Text
+                  </label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.05"
+                    value={textWeight}
+                    onChange={(e) => setTextWeight(Number(e.target.value))}
+                    className="w-full border-2 border-black p-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#2596BE]"
+                  />
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <label className="block text-[9px] font-black uppercase tracking-wider text-zinc-500 mb-1">
+                Similar Company Threshold
+              </label>
+              <p className="text-[10px] text-zinc-400 mb-2">
+                Minimum similarity (0–1) for a portfolio company to count as &quot;similar&quot;
+                toward an investor&apos;s text score.
+              </p>
+              <input
+                type="number"
+                min="0"
+                max="1"
+                step="0.05"
+                value={similarityThreshold}
+                onChange={(e) => setSimilarityThreshold(Number(e.target.value))}
+                className="w-32 border-2 border-black p-1.5 text-sm font-mono focus:outline-none focus:ring-2 focus:ring-[#2596BE]"
+              />
+            </div>
+
+            <button
+              type="button"
+              onClick={resetSettings}
+              className="text-[10px] font-bold uppercase border border-black px-2 py-1 hover:bg-zinc-200 transition-none"
+            >
+              Reset to Defaults
+            </button>
+          </div>
+        )}
       </div>
 
       {error && (

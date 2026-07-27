@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { createClient } from "@supabase/supabase-js";
 import { fetchMatchRun } from "@/lib/matchRuns";
 import { createClient as createSessionClient } from "@/lib/supabase/server";
-import { runMatch } from "@/lib/matching/matcher";
+import { runMatch, type WeightOverrides } from "@/lib/matching/matcher";
 import type { StartupInput } from "@/lib/matching/types";
 
 function getServiceClient() {
@@ -19,6 +19,28 @@ interface MatchRequestBody {
   targetRaise?: number;
   description?: string;
   location?: string;
+  weights?: Partial<Record<"vertical" | "stage" | "check_size" | "text", number>>;
+  similarityThreshold?: number;
+}
+
+// Only accept finite, non-negative numbers for weights -- resolveWeights()
+// renormalizes whatever comes through, so a garbage value would silently skew
+// every score in a run rather than erroring loudly.
+function sanitizeWeights(input: MatchRequestBody["weights"]): WeightOverrides | undefined {
+  if (!input || typeof input !== "object") return undefined;
+  const out: WeightOverrides = {};
+  for (const key of ["vertical", "stage", "check_size", "text"] as const) {
+    const value = input[key];
+    if (typeof value === "number" && Number.isFinite(value) && value >= 0) {
+      out[key] = value;
+    }
+  }
+  return out;
+}
+
+function sanitizeThreshold(value: unknown): number | undefined {
+  if (typeof value !== "number" || !Number.isFinite(value)) return undefined;
+  return Math.min(1, Math.max(0, value));
 }
 
 export async function POST(req: NextRequest) {
@@ -60,7 +82,12 @@ export async function POST(req: NextRequest) {
   try {
     // Runs natively in this Node process now -- no subprocess, no Python, so this
     // works the same on Vercel's serverless functions as it does locally.
-    const result = await runMatch(sb, startup);
+    const result = await runMatch(
+      sb,
+      startup,
+      sanitizeWeights(body.weights),
+      sanitizeThreshold(body.similarityThreshold),
+    );
     matchRunId = result.matchRunId;
   } catch (err) {
     return NextResponse.json(

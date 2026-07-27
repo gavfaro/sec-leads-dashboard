@@ -18,8 +18,10 @@ export interface VerticalFocusRow {
 }
 
 export interface ContactInvestmentRow {
+  company_id: string | null;
   company_name: string | null;
   description: string | null;
+  website: string | null;
   relationship: string | null;
   investment_stage: string | null;
   year_partnered: number | null;
@@ -39,11 +41,27 @@ export interface Contact {
   investments: ContactInvestmentRow[];
 }
 
+export interface SimilarCompanyBreakdown {
+  companyId: string;
+  companyName: string;
+  description: string | null;
+  website: string | null;
+  score: number;
+}
+
 export interface ScoreBreakdown {
   vertical: number;
   stage: number;
   check_size: number;
   text: number;
+  // Which of the contact's portfolio companies cleared the relevance threshold
+  // against the startup's description, best-first -- not used in the weighted
+  // sum itself, just carried along so the UI can show what drove the text score.
+  similar_companies: SimilarCompanyBreakdown[];
+  // The contact's own bio-vs-startup similarity, if it cleared the threshold --
+  // folded into `text` (see companySimilarity.ts's portfolioRelevanceScore),
+  // surfaced separately for the same auditability reason as similar_companies.
+  bio_similarity: number | null;
 }
 
 export interface ScoredResult {

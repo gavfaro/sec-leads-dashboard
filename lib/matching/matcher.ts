@@ -1,11 +1,30 @@
 // Ported from math_engine/matcher.py.
 import type { SupabaseClient } from "@supabase/supabase-js";
-import { ContactFeatureEncoder } from "./encoder";
+import { ContactFeatureEncoder, personalText } from "./encoder";
 import { fetchInvestorData } from "./dataPuller";
 import { distributionStageFit, normalizeStage } from "./stage";
-import { cosineSimilarity } from "./embeddings";
-import { getOrCreateEmbeddings, normalizeTag } from "./verticalEmbeddings";
-import type { Contact, ScoreBreakdown, ScoredResult, StartupInput } from "./types";
+import { cosineSimilarity, embedText } from "./embeddings";
+import {
+  fetchAllVerticalTagEmbeddings,
+  getOrCreateEmbeddings,
+  nearestVerticalTags,
+  normalizeTag,
+} from "./verticalEmbeddings";
+import {
+  BIO_SIMILARITY_THRESHOLD,
+  DEFAULT_SIMILARITY_THRESHOLD,
+  fetchAllCompanyEmbeddings,
+  fetchAllContactBioEmbeddings,
+  portfolioRelevanceScore,
+  relevantPortfolioCompanies,
+} from "./companySimilarity";
+import type {
+  Contact,
+  ScoreBreakdown,
+  ScoredResult,
+  SimilarCompanyBreakdown,
+  StartupInput,
+} from "./types";
 
 // Weighted-sum fusion, not a learned attention mechanism -- there's no labeled
 // outcome data yet to fit weights against. Whatever's used gets stored on the run
@@ -21,21 +40,56 @@ export const DEFAULT_WEIGHTS: Record<string, number> = {
 // for missing enrichment, and don't reward it either.
 const NEUTRAL_SCORE = 0.5;
 
+// How many live embedText() calls run concurrently when resolving the tier-3
+// fallback below -- mirrors verticalEmbeddings.ts's EMBED_CONCURRENCY so a
+// match run with an unusually large batch of under-enriched contacts can't
+// burst past the hosted embeddings API's per-minute rate limit.
+const FALLBACK_EMBED_CONCURRENCY = 10;
+
+// Last-resort vertical inference for contacts with neither their own
+// contact_verticals nor their firm's vertical_focus: embeds their bio +
+// portfolio text and takes the nearest cached vertical tags, the same
+// nearest-neighbor approach already used for the company-verticals popup
+// (verticalEmbeddings.ts) -- replacing what used to be a fixed 12-category
+// keyword table that predated the embedding infrastructure and covered a
+// fraction of the now ~270-tag vocabulary.
+async function inferVerticalWeightsForContacts(
+  contacts: Contact[],
+  indices: number[],
+  tagEmbeddings: Map<string, number[]>,
+): Promise<Map<number, Record<string, number>>> {
+  const result = new Map<number, Record<string, number>>();
+  for (let i = 0; i < indices.length; i += FALLBACK_EMBED_CONCURRENCY) {
+    const batch = indices.slice(i, i + FALLBACK_EMBED_CONCURRENCY);
+    const resolved = await Promise.all(
+      batch.map(async (contactIndex) => {
+        const text = personalText(contacts[contactIndex]);
+        if (!text.trim()) return {};
+        const embedding = await embedText(text);
+        const nearest = nearestVerticalTags(embedding, tagEmbeddings, 3);
+        const weights: Record<string, number> = {};
+        for (const n of nearest) weights[n.tag] = n.score;
+        return weights;
+      }),
+    );
+    batch.forEach((contactIndex, j) => result.set(contactIndex, resolved[j]));
+  }
+  return result;
+}
+
 // Vertical fit is embedding-based rather than exact-string matching: the tag
 // vocabulary scraped across firms has grown into the hundreds of fragmented
 // spellings of the same concepts (Y Combinator alone has 280+ distinct tags --
 // "AIOps", "Generative AI", "Machine Learning", "ML" all mean roughly the same
 // thing), so a hand-maintained alias table stopped being viable. This reuses
-// encoder.verticalWeights()'s existing fallback chain (a contact's own tags -> their
-// firm's -> keyword-inferred from bio/portfolio text) entirely unchanged -- it just
-// swaps the final "does this tag exactly match a startup tag" comparison for
-// semantic similarity, weighted by how much each tag represents the contact
-// (encoder.verticalWeights()'s own distribution).
+// ContactFeatureEncoder.structuredVerticalWeights()'s fallback chain (a contact's
+// own tags -> their firm's -> embedding-inferred from bio/portfolio text) --
+// it just swaps the final "does this tag exactly match a startup tag" comparison
+// for semantic similarity, weighted by how much each tag represents the contact.
 async function computeVerticalFits(
   sb: SupabaseClient,
   startupVerticals: string[],
   contacts: Contact[],
-  encoder: ContactFeatureEncoder,
 ): Promise<Map<string, number>> {
   const fits = new Map<string, number>();
   if (startupVerticals.length === 0) {
@@ -43,7 +97,27 @@ async function computeVerticalFits(
     return fits;
   }
 
-  const contactWeightMaps = contacts.map((c) => encoder.verticalWeights(c));
+  const structured = contacts.map((c) => ContactFeatureEncoder.structuredVerticalWeights(c));
+  const contactWeightMaps: Record<string, number>[] = structured.map((m) => m ?? {});
+
+  const needsFallback = contacts
+    .map((_, i) => i)
+    .filter((i) => structured[i] === null);
+  if (needsFallback.length > 0) {
+    try {
+      const tagEmbeddings = await fetchAllVerticalTagEmbeddings(sb);
+      const inferred = await inferVerticalWeightsForContacts(contacts, needsFallback, tagEmbeddings);
+      for (const [contactIndex, weights] of inferred) {
+        contactWeightMaps[contactIndex] = weights;
+      }
+    } catch (err) {
+      // No structured tags and the fallback itself failed -- leave these
+      // contacts with an empty weight map, same as "no personal text to infer
+      // from" below, which resolves to NEUTRAL_SCORE.
+      console.error("Embedding-based vertical fallback failed:", err);
+    }
+  }
+
   const allTags = [...startupVerticals, ...contactWeightMaps.flatMap((m) => Object.keys(m))];
 
   let embeddings: Map<string, number[]>;
@@ -83,7 +157,91 @@ async function computeVerticalFits(
   return fits;
 }
 
-function checkSizeFit(typicalCheckSize: number | null, targetRaise: number | null): number {
+interface TextFit {
+  score: number;
+  similarCompanies: SimilarCompanyBreakdown[];
+  bioSimilarity: number | null;
+}
+
+const NO_TEXT_FIT: TextFit = { score: NEUTRAL_SCORE, similarCompanies: [], bioSimilarity: null };
+
+// Text fit: sum-above-threshold similarity between the startup's description and
+// (a) a contact's portfolio company descriptions and (b) the contact's own bio
+// (see companySimilarity.ts), replacing what used to be TF-IDF word-overlap over
+// a bio+description blend. An investor who's backed several genuinely relevant
+// companies -- or who describes their own focus similarly to the startup -- now
+// outscores one who hasn't, and (unlike TF-IDF) this catches similarity even
+// when the text shares no literal words. Also carries along *which* companies
+// cleared the threshold, best-first, so the UI can show them on the contact's
+// card instead of just the aggregate number.
+async function computeTextFits(
+  sb: SupabaseClient,
+  startupDescription: string,
+  contacts: Contact[],
+  similarityThreshold: number,
+): Promise<Map<string, TextFit>> {
+  const fits = new Map<string, TextFit>();
+  if (!startupDescription.trim()) {
+    for (const c of contacts) fits.set(c.id, NO_TEXT_FIT);
+    return fits;
+  }
+
+  let startupEmbedding: number[];
+  let companyEmbeddings: Map<string, number[]>;
+  let bioEmbeddings: Map<string, number[]>;
+  try {
+    [startupEmbedding, companyEmbeddings, bioEmbeddings] = await Promise.all([
+      embedText(startupDescription),
+      fetchAllCompanyEmbeddings(sb),
+      fetchAllContactBioEmbeddings(sb),
+    ]);
+  } catch (err) {
+    console.error("Company similarity lookup failed, falling back to neutral:", err);
+    for (const c of contacts) fits.set(c.id, NO_TEXT_FIT);
+    return fits;
+  }
+
+  for (const contact of contacts) {
+    const portfolio = contact.investments
+      .filter((inv) => inv.company_id && companyEmbeddings.has(inv.company_id))
+      .map((inv) => ({ companyId: inv.company_id, relationship: inv.relationship }));
+    const relevant = relevantPortfolioCompanies(
+      startupEmbedding,
+      portfolio,
+      companyEmbeddings,
+      similarityThreshold,
+    );
+
+    const bioVec = bioEmbeddings.get(contact.id);
+    let bioSimilarity: number | null = null;
+    if (bioVec) {
+      const sim = cosineSimilarity(startupEmbedding, bioVec);
+      if (sim >= BIO_SIMILARITY_THRESHOLD) bioSimilarity = sim;
+    }
+
+    if (relevant.length === 0 && bioSimilarity === null) {
+      fits.set(contact.id, NO_TEXT_FIT);
+      continue;
+    }
+
+    const investmentByCompanyId = new Map(contact.investments.map((inv) => [inv.company_id, inv]));
+    fits.set(contact.id, {
+      score: portfolioRelevanceScore(relevant, bioSimilarity),
+      bioSimilarity: bioSimilarity !== null ? round4(bioSimilarity) : null,
+      similarCompanies: relevant.map((r) => ({
+        companyId: r.companyId,
+        companyName: investmentByCompanyId.get(r.companyId)?.company_name ?? "Unknown",
+        description: investmentByCompanyId.get(r.companyId)?.description ?? null,
+        website: investmentByCompanyId.get(r.companyId)?.website ?? null,
+        score: round4(r.score),
+      })),
+    });
+  }
+
+  return fits;
+}
+
+export function checkSizeFit(typicalCheckSize: number | null, targetRaise: number | null): number {
   if (!typicalCheckSize || !targetRaise) return NEUTRAL_SCORE;
   const ratio = Math.max(typicalCheckSize, targetRaise) / Math.min(typicalCheckSize, targetRaise);
   return Math.max(0.0, 1.0 - Math.log10(ratio));
@@ -111,22 +269,24 @@ export function scoreStartupAgainstInvestors(
   startup: StartupInput,
   contacts: Contact[],
   weights: Record<string, number>,
-  encoder: ContactFeatureEncoder,
   verticalFits: Map<string, number>,
+  textFits: Map<string, TextFit>,
 ): ScoredResult[] {
   const normalizedStage = normalizeStage(startup.stage);
 
-  const results: ScoredResult[] = contacts.map((contact, i) => {
+  const results: ScoredResult[] = contacts.map((contact) => {
     const verticalScore = verticalFits.get(contact.id) ?? NEUTRAL_SCORE;
-    const stageScore = distributionStageFit(encoder.stageDistribution(contact), normalizedStage);
-    const checkSizeScore = checkSizeFit(encoder.typicalCheckSize(contact), startup.targetRaise);
-    const textScore = encoder.textSimilarity(i, startup.description);
+    const stageScore = distributionStageFit(ContactFeatureEncoder.stageDistribution(contact), normalizedStage);
+    const checkSizeScore = checkSizeFit(ContactFeatureEncoder.typicalCheckSize(contact), startup.targetRaise);
+    const textFit = textFits.get(contact.id) ?? NO_TEXT_FIT;
 
     const breakdown: ScoreBreakdown = {
       vertical: round4(verticalScore),
       stage: round4(stageScore),
       check_size: round4(checkSizeScore),
-      text: round4(textScore),
+      text: round4(textFit.score),
+      similar_companies: textFit.similarCompanies,
+      bio_similarity: textFit.bioSimilarity,
     };
     const score = round4(
       weights.vertical * breakdown.vertical +
@@ -159,12 +319,16 @@ export async function runMatch(
   sb: SupabaseClient,
   startup: StartupInput,
   weightOverrides?: WeightOverrides,
+  similarityThreshold?: number,
 ): Promise<{ matchRunId: string; results: ScoredResult[] }> {
   const weights = resolveWeights(weightOverrides);
+  const threshold = similarityThreshold ?? DEFAULT_SIMILARITY_THRESHOLD;
   const contacts = await fetchInvestorData(sb);
-  const encoder = new ContactFeatureEncoder(contacts);
-  const verticalFits = await computeVerticalFits(sb, startup.verticals, contacts, encoder);
-  const results = scoreStartupAgainstInvestors(startup, contacts, weights, encoder, verticalFits);
+  const [verticalFits, textFits] = await Promise.all([
+    computeVerticalFits(sb, startup.verticals, contacts),
+    computeTextFits(sb, startup.description, contacts, threshold),
+  ]);
+  const results = scoreStartupAgainstInvestors(startup, contacts, weights, verticalFits, textFits);
 
   const { data: runData, error: runError } = await sb
     .from("match_runs")
@@ -179,6 +343,7 @@ export async function runMatch(
         location: startup.location,
       },
       weights_used: weights,
+      similarity_threshold: threshold,
     })
     .select("id")
     .single();
