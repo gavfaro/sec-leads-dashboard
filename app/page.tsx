@@ -2,6 +2,11 @@ import { createClient } from "@supabase/supabase-js";
 import Link from "next/link";
 import FilterForm from "./components/FilterForm"; // Import our new Client Component
 import NewestLeads from "./components/NewestLeads";
+import {
+  FILTER_KEYS,
+  buildFundraisingQuery,
+  getFundraisingSort,
+} from "@/lib/fundraisingSearch";
 
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL!;
 const supabaseAnonKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!;
@@ -37,31 +42,6 @@ interface PageProps {
   }>;
 }
 
-const FILTER_KEYS = [
-  "name",
-  "cik",
-  "city",
-  "state",
-  "industry",
-  "entityType",
-  "fundType",
-  "type",
-  "minRaise",
-  "maxRaise",
-  "offeringType",
-  "minSold",
-  "maxSold",
-  "minCheck",
-  "maxCheck",
-  "revenueRange",
-  "exemption",
-  "accredited",
-  "phoneOnly",
-  "dateFrom",
-  "dateTo",
-  "sort",
-] as const;
-
 // SEC Form D allows an offering to be uncapped — target_raise comes back as
 // the literal string "Indefinite" rather than a number in that case, which
 // Number() turns into NaN.
@@ -85,88 +65,25 @@ export default async function SECDashboard({ searchParams }: PageProps) {
 
   // 1. Extract URL Parameters
   const currentPage = Math.max(1, parseInt(resolvedParams.page || "1", 10));
-  const nameSearch = resolvedParams.name || "";
-  const cik = resolvedParams.cik || "";
-  const city = resolvedParams.city || "";
-  const stateCode = resolvedParams.state || "";
-  const industry = resolvedParams.industry || "";
-  const entityType = resolvedParams.entityType || "";
-  const fundType = resolvedParams.fundType || "";
-  const submissionType = resolvedParams.type || "";
-  const minRaise = parseInt(resolvedParams.minRaise || "", 10);
-  const maxRaise = parseInt(resolvedParams.maxRaise || "", 10);
-  const offeringType = resolvedParams.offeringType || "";
-  const minSold = parseInt(resolvedParams.minSold || "", 10);
-  const maxSold = parseInt(resolvedParams.maxSold || "", 10);
-  const minCheck = parseInt(resolvedParams.minCheck || "", 10);
-  const maxCheck = parseInt(resolvedParams.maxCheck || "", 10);
-  const revenueRange = resolvedParams.revenueRange || "";
-  const exemption = resolvedParams.exemption || "";
-  const accredited = resolvedParams.accredited || "";
-  const phoneOnly = resolvedParams.phoneOnly === "true";
-  const dateFrom = resolvedParams.dateFrom || "";
-  const dateTo = resolvedParams.dateTo || "";
   const sort = resolvedParams.sort || "date_desc";
 
   const from = (currentPage - 1) * ITEMS_PER_PAGE;
   const to = from + ITEMS_PER_PAGE - 1;
 
-  // 2. Build the Supabase Query Dynamically
-  let query = supabase
-    .from("company_fundraising_profiles")
-    .select(
-      "issuer_id, cik, company_name, city, state, target_raise, amount_sold, filing_date, ACCESSIONNUMBER, industry, submission_type",
-      { count: "estimated" },
-    );
+  // 2. Build the Supabase Query Dynamically (shared with the CSV export route
+  // so downloaded results always match what's on screen)
+  const query = buildFundraisingQuery(
+    supabase,
+    "issuer_id, cik, company_name, city, state, target_raise, amount_sold, filing_date, ACCESSIONNUMBER, industry, submission_type",
+    resolvedParams,
+    { count: "estimated" },
+  );
 
-  // 3. Stack the Boolean Filters
-  if (nameSearch) query = query.ilike("company_name", `%${nameSearch}%`);
-  if (cik) query = query.eq("cik", parseInt(cik, 10));
-  if (city) query = query.ilike("city", `%${city}%`);
-  if (stateCode) query = query.ilike("state", stateCode);
-  if (industry) query = query.eq("industry", industry);
-  if (entityType) query = query.eq("entity_type", entityType);
-  if (fundType === "NONE") query = query.is("investment_fund_type", null);
-  else if (fundType) query = query.eq("investment_fund_type", fundType);
-  if (submissionType) query = query.eq("submission_type", submissionType);
-
-  // Numeric ranges run against the numeric-safe columns added in migration
-  // 0004 — target_raise/amount_sold/min_investment can't be trusted for
-  // comparisons directly (target_raise is text and holds "Indefinite").
-  if (!isNaN(minRaise)) query = query.gte("target_raise_numeric", minRaise);
-  if (!isNaN(maxRaise)) query = query.lte("target_raise_numeric", maxRaise);
-  if (offeringType === "fixed")
-    query = query.eq("is_indefinite_offering", false);
-  else if (offeringType === "indefinite")
-    query = query.eq("is_indefinite_offering", true);
-
-  if (!isNaN(minSold)) query = query.gte("amount_sold", minSold);
-  if (!isNaN(maxSold)) query = query.lte("amount_sold", maxSold);
-
-  if (!isNaN(minCheck)) query = query.gte("min_investment", minCheck);
-  if (!isNaN(maxCheck)) query = query.lte("min_investment", maxCheck);
-
-  if (revenueRange) query = query.eq("revenue_range", revenueRange);
-  if (exemption) query = query.ilike("federal_exemptions", `%${exemption}%`);
-  if (accredited)
-    query = query.eq("has_non_accredited_investors", accredited === "true");
-  if (phoneOnly) query = query.not("issuer_phone", "is", null);
-
-  if (dateFrom) query = query.gte("filing_date_parsed", dateFrom);
-  if (dateTo) query = query.lte("filing_date_parsed", dateTo);
-
-  // 4. Sort — filing_date is stored as text ("DD-MON-YYYY"), so ordering by
-  // it directly sorts alphabetically, not chronologically. Use the
-  // migration's parsed/numeric columns instead.
-  const sortMap: Record<string, { column: string; ascending: boolean }> = {
-    date_desc: { column: "filing_date_parsed", ascending: false },
-    date_asc: { column: "filing_date_parsed", ascending: true },
-    raise_desc: { column: "target_raise_numeric", ascending: false },
-    sold_desc: { column: "amount_sold", ascending: false },
-    name_asc: { column: "company_name", ascending: true },
-  };
+  // Sort — filing_date is stored as text ("DD-MON-YYYY"), so ordering by it
+  // directly sorts alphabetically, not chronologically. Use the migration's
+  // parsed/numeric columns instead.
   const { column: sortColumn, ascending: sortAscending } =
-    sortMap[sort] || sortMap.date_desc;
+    getFundraisingSort(sort);
 
   // 4. Execute the Query
   const {
@@ -175,6 +92,10 @@ export default async function SECDashboard({ searchParams }: PageProps) {
     error,
   } = await query
     .order(sortColumn, { ascending: sortAscending, nullsFirst: false })
+    // issuer_id tiebreaker: without a deterministic secondary sort, rows
+    // tied on sortColumn can come back in a different order between page
+    // requests, silently skipping or duplicating rows under .range().
+    .order("issuer_id", { ascending: sortAscending })
     .range(from, to);
 
   if (error) {
@@ -199,24 +120,40 @@ export default async function SECDashboard({ searchParams }: PageProps) {
 
   return (
     <div className="max-w-7xl mx-auto p-4 font-sans text-black">
-      <header className="mb-6 border-b-4 border-white pb-4 flex justify-between items-end">
-        <div>
-          <h1 className="text-3xl font-black tracking-tight uppercase text-white">
-            Intelligence Dashboard
-          </h1>
-          <p className="text-base font-bold mt-1 text-white">
-            Mark Zuckerberg's Computer
-          </p>
-        </div>
-        <div className="text-sm font-bold bg-[#2596BE] text-white px-4 py-2 border-2 border-black uppercase tracking-wide">
-          Results: {count || 0}
-        </div>
+      <header className="mb-6 border-b-4 border-white pb-4">
+        <h1 className="text-3xl font-black tracking-tight uppercase text-white">
+          Intelligence Dashboard
+        </h1>
+        <p className="text-base font-bold mt-1 text-white">
+          Mark Zuckerberg's Computer
+        </p>
       </header>
 
       <NewestLeads />
 
       {/* Insert the Filter Control Panel here */}
       <FilterForm />
+
+      <div className="flex justify-between items-center mb-4">
+        <div className="flex gap-2">
+          <a
+            href={`/api/export-search${filterParams.toString() ? `?${filterParams.toString()}` : ""}`}
+            className="text-sm font-black bg-white text-black px-4 py-2 border-2 border-black uppercase tracking-wide hover:bg-[#2596BE] transition-none"
+          >
+            Export CSV
+          </a>
+          <a
+            href={`/api/export-search-detailed${filterParams.toString() ? `?${filterParams.toString()}` : ""}`}
+            title="Includes related persons, discovered investors, and filing history for every matching company"
+            className="text-sm font-black bg-white text-black px-4 py-2 border-2 border-black uppercase tracking-wide hover:bg-[#2596BE] transition-none"
+          >
+            Export Detailed (XLSX)
+          </a>
+        </div>
+        <div className="text-sm font-bold bg-[#2596BE] text-white px-4 py-2 border-2 border-black uppercase tracking-wide">
+          Results: {count || 0}
+        </div>
+      </div>
 
       <div className="overflow-x-auto border-2 border-black bg-white">
         <table className="w-full text-left border-collapse text-sm">
