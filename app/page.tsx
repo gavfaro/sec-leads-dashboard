@@ -146,12 +146,6 @@ export default async function SECDashboard({ searchParams }: PageProps) {
         {hasActiveFilters ? (
           <div className="flex gap-2">
             <a
-              href={`/api/export-search?${filterParams.toString()}`}
-              className="text-sm font-black bg-white text-black px-4 py-2 border-2 border-black uppercase tracking-wide hover:bg-[#2596BE] transition-none"
-            >
-              Export CSV
-            </a>
-            <a
               href={`/api/export-search-detailed?${filterParams.toString()}`}
               title="Includes related persons, discovered investors, and filing history for every matching company"
               className="text-sm font-black bg-white text-black px-4 py-2 border-2 border-black uppercase tracking-wide hover:bg-[#2596BE] transition-none"
