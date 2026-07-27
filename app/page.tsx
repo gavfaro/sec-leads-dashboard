@@ -118,6 +118,14 @@ export default async function SECDashboard({ searchParams }: PageProps) {
     ? `&${filterParams.toString()}`
     : "";
 
+  // Only offer exports once the user has actually narrowed the data down —
+  // "sort" alone doesn't reduce the result set, so it doesn't count as a
+  // filter here. Without this, the buttons would let someone one-click
+  // export the entire unfiltered table.
+  const hasActiveFilters = FILTER_KEYS.some(
+    (key) => key !== "sort" && resolvedParams[key],
+  );
+
   return (
     <div className="max-w-7xl mx-auto p-4 font-sans text-black">
       <header className="mb-6 border-b-4 border-white pb-4">
@@ -135,21 +143,25 @@ export default async function SECDashboard({ searchParams }: PageProps) {
       <FilterForm />
 
       <div className="flex justify-between items-center mb-4">
-        <div className="flex gap-2">
-          <a
-            href={`/api/export-search${filterParams.toString() ? `?${filterParams.toString()}` : ""}`}
-            className="text-sm font-black bg-white text-black px-4 py-2 border-2 border-black uppercase tracking-wide hover:bg-[#2596BE] transition-none"
-          >
-            Export CSV
-          </a>
-          <a
-            href={`/api/export-search-detailed${filterParams.toString() ? `?${filterParams.toString()}` : ""}`}
-            title="Includes related persons, discovered investors, and filing history for every matching company"
-            className="text-sm font-black bg-white text-black px-4 py-2 border-2 border-black uppercase tracking-wide hover:bg-[#2596BE] transition-none"
-          >
-            Export Detailed (XLSX)
-          </a>
-        </div>
+        {hasActiveFilters ? (
+          <div className="flex gap-2">
+            <a
+              href={`/api/export-search?${filterParams.toString()}`}
+              className="text-sm font-black bg-white text-black px-4 py-2 border-2 border-black uppercase tracking-wide hover:bg-[#2596BE] transition-none"
+            >
+              Export CSV
+            </a>
+            <a
+              href={`/api/export-search-detailed?${filterParams.toString()}`}
+              title="Includes related persons, discovered investors, and filing history for every matching company"
+              className="text-sm font-black bg-white text-black px-4 py-2 border-2 border-black uppercase tracking-wide hover:bg-[#2596BE] transition-none"
+            >
+              Export Detailed (XLSX)
+            </a>
+          </div>
+        ) : (
+          <div />
+        )}
         <div className="text-sm font-bold bg-[#2596BE] text-white px-4 py-2 border-2 border-black uppercase tracking-wide">
           Results: {count || 0}
         </div>
