@@ -2127,6 +2127,1880 @@ def scrape_greylock_team(sb: Client, dry_run: bool = False, limit: int | None = 
 
 
 # ---------------------------------------------------------------------------
+# Andreessen Horowitz (a16z)
+# ---------------------------------------------------------------------------
+# Both the portfolio and team pages embed their full dataset as JSON in the
+# rendered HTML (window.a16z_portfolio_companies / a data-payload attribute),
+# rather than requiring per-card DOM scraping or a "load more" click loop --
+# confirmed by inspecting the rendered page directly. No per-deal partner
+# attribution is published, so companies are linked at the org level only
+# (same as scrape_firm's generic path when a page lists no investor per row).
+
+A16Z_BASE = "https://a16z.com"
+A16Z_PORTFOLIO_URL = f"{A16Z_BASE}/portfolio/"
+A16Z_TEAM_URL = f"{A16Z_BASE}/team/"
+
+# a16z's own "stage" facet mixes funding rounds with exit/liquidity events
+# (m&a, ipo, dpo, spac are outcomes, not stages) -- only map the genuine
+# funding-round values into our STAGE_VOCABULARY-shaped text; leave the rest
+# unstamped rather than guess.
+_A16Z_STAGE_MAP = {"seed": "Seed", "venture": "Series A", "growth": "Growth"}
+
+
+def _a16z_extract_json_global(page_html: str, var_name: str) -> list[dict]:
+    """Extract a `window.<var_name> = [...]` embedded JSON array from raw HTML."""
+    m = re.search(rf"window\.{re.escape(var_name)}\s*=\s*(\[.*?\]);", page_html, re.DOTALL)
+    if not m:
+        raise ValueError(f"Could not find window.{var_name} in page")
+    return _json.loads(m.group(1))
+
+
+def _a16z_company_description(co: dict) -> str | None:
+    """Prefer the company's own 'overview' blurb; fall back to the excerpt from
+    a16z's investment-announcement post when overview is blank (covers ~93% of
+    the portfolio between the two, vs ~86% for overview alone)."""
+    overview = (co.get("overview") or "").strip()
+    if overview:
+        return overview
+    excerpt = ((co.get("announcement") or {}).get("excerpt") or "").strip()
+    return excerpt or None
+
+
+def scrape_a16z_companies(sb: Client, dry_run: bool = False, limit: int | None = None) -> None:
+    """
+    Scrape a16z portfolio companies from the embedded window.a16z_portfolio_companies
+    JSON on their public portfolio page. Writes: companies, portfolio_investments.
+    """
+    org_name = "Andreessen Horowitz"
+
+    log.info("Fetching a16z portfolio page")
+    page_html = fetch_rendered_html(A16Z_PORTFOLIO_URL)
+    companies = _a16z_extract_json_global(page_html, "a16z_portfolio_companies")
+    log.info("Found %d a16z portfolio companies", len(companies))
+
+    if limit:
+        companies = companies[:limit]
+
+    if dry_run:
+        log.info("[DRY-RUN] Would write %d a16z companies", len(companies))
+        for co in companies[:5]:
+            log.info("  %s | %s | desc=%s | stage=%s",
+                     co.get("title"), co.get("web"), bool(_a16z_company_description(co)), co.get("stage"))
+        return
+
+    org_id = get_or_create_organization(sb, org_name, "Multi-Stage VC", A16Z_BASE)
+
+    inserted, skipped = 0, 0
+    for co in companies:
+        try:
+            name = (co.get("title") or "").strip()
+            if not name or name == "[untitled]":
+                skipped += 1
+                continue
+            website = (co.get("web") or "").strip() or None
+            description = _a16z_company_description(co)
+            company_id = upsert_company(sb, name, website, description)
+            if not description:
+                log.warning("%s: no description found on site, inserted with null description", name)
+
+            stage_label = next(
+                (_A16Z_STAGE_MAP[s] for s in (co.get("stage") or []) if s in _A16Z_STAGE_MAP),
+                None,
+            )
+            get_or_create_portfolio_investment(sb, org_id, company_id, stage_label, None)
+
+            inserted += 1
+            if inserted % 100 == 0:
+                log.info("Processed %d/%d a16z companies", inserted, len(companies))
+        except Exception:
+            log.exception("Failed processing a16z company %r, skipping", co.get("title"))
+            skipped += 1
+
+    log.info("a16z companies done: %d inserted/updated, %d skipped", inserted, skipped)
+
+
+def _a16z_extract_team_payload(page_html: str) -> list[dict]:
+    """Extract the `data-payload="{...&quot;members&quot;:[...]}"` JSON blob
+    from the team page (HTML-entity-encoded, unlike the portfolio page's plain
+    window.* global)."""
+    import html as _html_unescape
+
+    m = re.search(r'data-payload="(\{.*?&quot;members&quot;:\[.*?\]\})"', page_html, re.DOTALL)
+    if not m:
+        raise ValueError("Could not find team payload in a16z team page")
+    return _json.loads(_html_unescape.unescape(m.group(1)))["members"]
+
+
+def _a16z_fetch_bio(profile_url: str) -> str | None:
+    """Fetch an a16z author profile page and pull their bio paragraphs. The
+    bio is the first run of consecutive <p> tags sharing a parent right after
+    the page header -- later paragraphs belong to an unrelated 'Content'
+    teaser block (confirmed by inspecting a sample profile directly)."""
+    req = urllib.request.Request(profile_url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        page_html = resp.read().decode("utf-8", errors="ignore")
+    soup = BeautifulSoup(page_html, "html.parser")
+    paragraphs = soup.select("main p")
+    if not paragraphs:
+        return None
+    first_parent = paragraphs[0].parent
+    bio_paragraphs = []
+    for p in paragraphs:
+        if p.parent is not first_parent:
+            break
+        text = p.get_text(strip=True)
+        if text:
+            bio_paragraphs.append(text)
+    return "\n\n".join(bio_paragraphs) or None
+
+
+def scrape_a16z_team(sb: Client, dry_run: bool = False, limit: int | None = None) -> None:
+    """
+    Scrape a16z's investing team from the team page's embedded JSON payload
+    (name, role, LinkedIn/Twitter, verticals), then visit each member's own
+    profile page for their bio, which isn't included in that payload.
+    Writes: organization, contacts (bio/LinkedIn/role), contact_verticals.
+    """
+    org_name = "Andreessen Horowitz"
+    entity_type = "Multi-Stage VC"
+
+    log.info("Fetching a16z team page")
+    page_html = fetch_rendered_html(A16Z_TEAM_URL)
+    members = _a16z_extract_team_payload(page_html)
+    investing = [m for m in members if "investment-team" in (m.get("group_slugs") or [])]
+    log.info("Found %d investing team members (of %d total)", len(investing), len(members))
+
+    if limit:
+        investing = investing[:limit]
+
+    if dry_run:
+        log.info("[DRY-RUN] Would write %d a16z contacts", len(investing))
+        for m in investing:
+            verts = sorted(set(m.get("vertical_slugs") or []))
+            log.info("  %s | %s | verts=%s", m.get("name"), m.get("role_display"), verts)
+        return
+
+    org_id = get_or_create_organization(sb, org_name, entity_type, A16Z_BASE)
+
+    for member in investing:
+        try:
+            name = (member.get("name") or "").strip()
+            if not name:
+                continue
+            contact_id = get_or_create_contact(sb, org_id, name)
+
+            socials = member.get("socials") or []
+            linkedin_url = next((s["url"] for s in socials if s.get("icon") == "icon-linkedin"), None)
+            twitter_url = next((s["url"] for s in socials if s.get("icon") == "icon-twitter"), None)
+
+            bio = None
+            profile_url = member.get("profile_url")
+            if profile_url and not member.get("external"):
+                try:
+                    bio = _a16z_fetch_bio(profile_url)
+                except Exception:
+                    log.warning("Could not fetch bio for %s at %s", name, profile_url)
+                time.sleep(CRAWL_DELAY_SECONDS)
+
+            update_contact_profile(
+                sb, contact_id,
+                bio=bio,
+                email=None,
+                role=member.get("role_display") or None,
+                linkedin_url=linkedin_url,
+                other_sites={"twitter": twitter_url} if twitter_url else None,
+            )
+
+            for vertical_slug in sorted(set(member.get("vertical_slugs") or [])):
+                vertical_name = vertical_slug.replace("-", " ").title()
+                vertical_id = get_or_create_vertical(sb, vertical_name)
+                _get_or_create_contact_vertical(sb, contact_id, vertical_id)
+
+            log.info("Wrote %s | %s | bio=%s", name, member.get("role_display"), bool(bio))
+        except Exception:
+            log.exception("Failed writing a16z contact %r, skipping", member.get("name"))
+
+
+# ---------------------------------------------------------------------------
+# NEA
+# ---------------------------------------------------------------------------
+# Companies come from a dedicated JSON API (found by watching network requests
+# while the portfolio page loaded, same technique used to find a16z's and
+# Kleiner Perkins' data sources): www.nea.com/api/portfolio/companies returns
+# all 912 companies in one call, 100% with a description. No external website
+# field is in this payload at all (unlike company_stage/first_invested, which
+# are both present) -- same limitation as Lightspeed's grid, deliberately not
+# chased here; see DESCRIPTION_GAPS.md if a later pass wants to add it.
+#
+# The team page (nea.com/team) defaults to an "Investors" filter tab (vs.
+# Leadership/Investor Relations/Marketing & Impact) that's already exactly the
+# set we want -- confirmed every title in that default view is genuinely
+# investing-track (Partner, Principal, Associate, Venture Partner, etc.), so
+# no title-based filtering is needed here, unlike Lightspeed/Kleiner Perkins.
+# Bios and personal LinkedIn require visiting each of the 49 individual
+# nea.com/team/<slug> pages, which (like a16z's and Lightspeed's) work fine
+# with a plain HTTP GET.
+
+NEA_BASE = "https://www.nea.com"
+NEA_COMPANIES_API = f"{NEA_BASE}/api/portfolio/companies"
+NEA_TEAM_URL = f"{NEA_BASE}/team"
+
+# "Public"/"public" describes a liquidity outcome, not a funding round, so it's
+# deliberately left unmapped (same treatment as a16z's ipo/m&a/spac stages).
+_NEA_STAGE_MAP = {"early": "Series A", "seed": "Seed", "growth": "Growth"}
+
+
+def scrape_nea_companies(sb: Client, dry_run: bool = False, limit: int | None = None) -> None:
+    """
+    Scrape NEA's portfolio via their public JSON API. Writes: companies (name,
+    description -- no website, see module note above), portfolio_investments
+    (stage, year first invested), vertical_focus (from each company's category
+    tags, at the firm level -- no per-deal partner attribution is published).
+    """
+    org_name = "NEA"
+
+    log.info("Fetching NEA companies from JSON API")
+    req = urllib.request.Request(NEA_COMPANIES_API, headers={"User-Agent": USER_AGENT, "Accept": "application/json"})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        companies = _json.loads(resp.read())["companies"]
+    log.info("Found %d NEA portfolio companies", len(companies))
+
+    if limit:
+        companies = companies[:limit]
+
+    if dry_run:
+        log.info("[DRY-RUN] Would write %d NEA companies", len(companies))
+        for c in companies[:5]:
+            categories = [cat.get("title") for cat in (c.get("company_category") or [])]
+            log.info("  %s | stage=%s | year=%s | categories=%s", c.get("title"),
+                     (c.get("company_stage") or {}).get("value"), c.get("first_invested"), categories)
+        return
+
+    org_id = get_or_create_organization(sb, org_name, "Multi-Stage VC", NEA_BASE)
+
+    inserted, skipped = 0, 0
+    for c in companies:
+        try:
+            name = (c.get("title") or "").strip()
+            if not name:
+                skipped += 1
+                continue
+            description = (c.get("short_description") or "").strip() or None
+            company_id = upsert_company(sb, name, None, description)
+            if not description:
+                log.warning("%s: no description found on site, inserted with null description", name)
+
+            stage_value = ((c.get("company_stage") or {}).get("value") or "").lower()
+            stage_label = _NEA_STAGE_MAP.get(stage_value)
+            year_text = (c.get("first_invested") or "").strip()
+            year_partnered = int(year_text) if year_text.isdigit() and len(year_text) == 4 else None
+            get_or_create_portfolio_investment(sb, org_id, company_id, stage_label, year_partnered)
+
+            for category in (c.get("company_category") or []):
+                category_name = (category.get("title") or "").strip()
+                if category_name:
+                    vertical_id = get_or_create_vertical(sb, category_name)
+                    get_or_create_vertical_focus(sb, org_id, vertical_id)
+
+            inserted += 1
+            if inserted % 100 == 0:
+                log.info("Processed %d/%d NEA companies", inserted, len(companies))
+        except Exception:
+            log.exception("Failed processing NEA company %r, skipping", c.get("title"))
+            skipped += 1
+
+    log.info("NEA companies done: %d inserted/updated, %d skipped", inserted, skipped)
+
+
+def _nea_parse_team_grid(page_html: str) -> list[dict]:
+    soup = BeautifulSoup(page_html, "html.parser")
+    members = []
+    for card in soup.select("a.team_grid_card_root__fZIOy"):
+        name_el = card.select_one(".team_grid_card_name__JAgnh")
+        title_el = card.select_one(".team_grid_card_title__3bJJJ")
+        href = card.get("href")
+        if not name_el or not href:
+            continue
+        members.append({
+            "name": name_el.get_text(strip=True),
+            "role": title_el.get_text(strip=True) if title_el else None,
+            "profile_url": f"{NEA_BASE}{href}",
+        })
+    return members
+
+
+def _nea_fetch_bio_and_linkedin(profile_url: str) -> tuple[str | None, str | None]:
+    req = urllib.request.Request(profile_url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        page_html = resp.read().decode("utf-8", errors="ignore")
+    soup = BeautifulSoup(page_html, "html.parser")
+
+    bio_el = soup.select_one(".bio_hero_description__ENLos")
+    bio = bio_el.get_text(strip=True) if bio_el else None
+
+    linkedin_url = None
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        if "linkedin.com/in/" in href:
+            linkedin_url = href
+            break
+    return bio, linkedin_url
+
+
+def scrape_nea_team(sb: Client, dry_run: bool = False, limit: int | None = None) -> None:
+    """
+    Scrape NEA's investing team from the team page's default "Investors" tab
+    (name, role), then visit each member's own profile page for bio +
+    personal LinkedIn (not in the grid itself). Writes: organization,
+    contacts (bio/LinkedIn/role).
+    """
+    org_name = "NEA"
+    entity_type = "Multi-Stage VC"
+
+    log.info("Fetching NEA team page")
+    page_html = fetch_rendered_html(NEA_TEAM_URL)
+    members = _nea_parse_team_grid(page_html)
+    log.info("Found %d NEA team members", len(members))
+
+    if limit:
+        members = members[:limit]
+
+    if dry_run:
+        log.info("[DRY-RUN] Would write %d NEA contacts", len(members))
+        for m in members:
+            log.info("  %s | %s", m["name"], m["role"])
+        return
+
+    org_id = get_or_create_organization(sb, org_name, entity_type, NEA_BASE)
+
+    for member in members:
+        try:
+            name = member["name"].strip()
+            if not name:
+                continue
+            contact_id = get_or_create_contact(sb, org_id, name)
+
+            bio, linkedin_url = None, None
+            if member["profile_url"]:
+                try:
+                    bio, linkedin_url = _nea_fetch_bio_and_linkedin(member["profile_url"])
+                except Exception:
+                    log.warning("Could not fetch profile for %s at %s", name, member["profile_url"])
+                time.sleep(CRAWL_DELAY_SECONDS)
+
+            update_contact_profile(
+                sb, contact_id,
+                bio=bio,
+                email=None,
+                role=member["role"],
+                linkedin_url=linkedin_url,
+                other_sites=None,
+            )
+            log.info("Wrote %s | %s | bio=%s", name, member["role"], bool(bio))
+        except Exception:
+            log.exception("Failed writing NEA contact %r, skipping", member.get("name"))
+
+
+# ---------------------------------------------------------------------------
+# Kleiner Perkins
+# ---------------------------------------------------------------------------
+# Same public-WordPress-REST-API pattern as Founders Fund, but richer: custom
+# ACF fields carry a real multi-paragraph description (modal_description,
+# falling back to the shorter subhead/tagline), external website, LinkedIn/X,
+# and dedicated `sector`/`stage`/`person_role` taxonomies (resolved to names
+# via their own endpoints, not guessed from slugs) -- 411 companies across 5
+# pages, 30 people in one page.
+
+KP_BASE = "https://www.kleinerperkins.com"
+KP_API = f"{KP_BASE}/wp-json/wp/v2"
+
+# Only "Early"/"Growth" are genuine funding-round labels; "Acquired"/"IPO" are
+# exit outcomes and "Prior" is a relationship marker (matches the `timing`
+# field), none of which belong in investment_stage.
+_KP_STAGE_MAP = {"early": "Series A", "growth": "Growth"}
+
+# Roles confirmed via /wp-json/wp/v2/person_role -- everything not in this set
+# is a back-office/operating function (Marketing, Legal, Finance, Talent,
+# Operating Partner, X) rather than someone who sources/leads deals.
+_KP_INVESTING_ROLE_IDS = {54, 2, 10, 9, 28, 24, 25}  # Investor, Partner, Principal, VP, Partner and Advisor, Founder, Chairman
+
+
+def _kp_fetch_all(post_type: str) -> list[dict]:
+    items = []
+    page = 1
+    while True:
+        req = urllib.request.Request(
+            f"{KP_API}/{post_type}?per_page=100&page={page}", headers={"User-Agent": USER_AGENT}
+        )
+        with urllib.request.urlopen(req, timeout=20) as resp:
+            batch = _json.loads(resp.read())
+        if not batch:
+            break
+        items.extend(batch)
+        if len(batch) < 100:
+            break
+        page += 1
+    return items
+
+
+def _kp_fetch_taxonomy(taxonomy: str) -> dict[int, str]:
+    req = urllib.request.Request(f"{KP_API}/{taxonomy}?per_page=100", headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        terms = _json.loads(resp.read())
+    import html as _html_unescape
+
+    return {t["id"]: _html_unescape.unescape(t["name"]) for t in terms}
+
+
+def _kp_company_description(acf: dict) -> str | None:
+    for field in ("modal_description", "subhead", "tagline"):
+        text = (acf.get(field) or "").strip()
+        if text:
+            return text
+    return None
+
+
+def scrape_kleinerperkins_companies(sb: Client, dry_run: bool = False, limit: int | None = None) -> None:
+    """
+    Scrape Kleiner Perkins' portfolio via their public WordPress REST API.
+    Writes: companies (name, website, description), portfolio_investments
+    (stage, year), vertical_focus (from each company's sector tags, at the
+    firm level -- no per-deal partner attribution is published).
+    """
+    org_name = "Kleiner Perkins"
+
+    log.info("Fetching Kleiner Perkins companies from REST API")
+    companies = _kp_fetch_all("company")
+    sector_names = _kp_fetch_taxonomy("sector")
+    log.info("Found %d Kleiner Perkins portfolio companies", len(companies))
+
+    if limit:
+        companies = companies[:limit]
+
+    if dry_run:
+        log.info("[DRY-RUN] Would write %d Kleiner Perkins companies", len(companies))
+        for c in companies[:5]:
+            acf = c.get("acf") or {}
+            name = c.get("title", {}).get("rendered")
+            sectors = [sector_names.get(s) for s in (acf.get("sector") or [])]
+            log.info("  %s | %s | sectors=%s | desc=%s", name, acf.get("website_url"), sectors, bool(_kp_company_description(acf)))
+        return
+
+    org_id = get_or_create_organization(sb, org_name, "Multi-Stage VC", KP_BASE)
+
+    inserted, skipped = 0, 0
+    for c in companies:
+        try:
+            name = (c.get("title", {}).get("rendered") or "").strip()
+            if not name:
+                skipped += 1
+                continue
+            acf = c.get("acf") or {}
+            description = _kp_company_description(acf)
+            website = (acf.get("website_url") or "").strip() or None
+            company_id = upsert_company(sb, name, website, description)
+            if not description:
+                log.warning("%s: no description found on site, inserted with null description", name)
+
+            stage_slugs = [s.replace("stage-", "") for s in (c.get("class_list") or []) if s.startswith("stage-")]
+            stage_label = next((_KP_STAGE_MAP[s] for s in stage_slugs if s in _KP_STAGE_MAP), None)
+            since_text = (acf.get("since_text") or "").strip()
+            year_partnered = int(since_text) if since_text.isdigit() and len(since_text) == 4 else None
+            get_or_create_portfolio_investment(sb, org_id, company_id, stage_label, year_partnered)
+
+            for sector_id in (acf.get("sector") or []):
+                sector_name = sector_names.get(sector_id)
+                if sector_name:
+                    vertical_id = get_or_create_vertical(sb, sector_name)
+                    get_or_create_vertical_focus(sb, org_id, vertical_id)
+
+            inserted += 1
+            if inserted % 100 == 0:
+                log.info("Processed %d/%d Kleiner Perkins companies", inserted, len(companies))
+        except Exception:
+            log.exception("Failed processing Kleiner Perkins company %r, skipping", c.get("title"))
+            skipped += 1
+
+    log.info("Kleiner Perkins companies done: %d inserted/updated, %d skipped", inserted, skipped)
+
+
+def scrape_kleinerperkins_team(sb: Client, dry_run: bool = False, limit: int | None = None) -> None:
+    """
+    Scrape Kleiner Perkins' investing team via their public WordPress REST
+    API -- bio, LinkedIn, and X are all in the same response, no per-profile
+    page visits needed. Writes: organization, contacts (bio/LinkedIn/role).
+    """
+    org_name = "Kleiner Perkins"
+    entity_type = "Multi-Stage VC"
+
+    log.info("Fetching Kleiner Perkins team from REST API")
+    all_people = _kp_fetch_all("person")
+    role_names = _kp_fetch_taxonomy("person_role")
+    investing = [p for p in all_people if (p.get("acf") or {}).get("role") in _KP_INVESTING_ROLE_IDS]
+    log.info("Found %d investing team members (of %d total)", len(investing), len(all_people))
+
+    if limit:
+        investing = investing[:limit]
+
+    if dry_run:
+        log.info("[DRY-RUN] Would write %d Kleiner Perkins contacts", len(investing))
+        for p in investing:
+            acf = p.get("acf") or {}
+            role_name = role_names.get(acf.get("role"))
+            log.info("  %s | %s", p.get("title", {}).get("rendered"), role_name)
+        return
+
+    org_id = get_or_create_organization(sb, org_name, entity_type, KP_BASE)
+
+    for person in investing:
+        try:
+            name = (person.get("title", {}).get("rendered") or "").strip()
+            if not name:
+                continue
+            acf = person.get("acf") or {}
+            contact_id = get_or_create_contact(sb, org_id, name)
+
+            bio = (acf.get("bio") or "").strip() or None
+            role_name = role_names.get(acf.get("role"))
+            linkedin_url = (acf.get("linkedin_url") or "").strip() or None
+            twitter_url = (acf.get("x_url") or "").strip() or None
+
+            update_contact_profile(
+                sb, contact_id,
+                bio=bio,
+                email=(acf.get("email") or "").strip() or None,
+                role=role_name,
+                linkedin_url=linkedin_url,
+                other_sites={"twitter": twitter_url} if twitter_url else None,
+            )
+            log.info("Wrote %s | %s | bio=%s", name, role_name, bool(bio))
+        except Exception:
+            log.exception("Failed writing Kleiner Perkins contact %r, skipping", person.get("title"))
+
+
+# ---------------------------------------------------------------------------
+# ICONIQ
+# ---------------------------------------------------------------------------
+# Companies-only -- ICONIQ has no public team/people page at all (confirmed:
+# iconiqcapital.com/team redirects to www.iconiq.com/team, which 404s; matches
+# Firms.csv's own "N/A" note for ICONIQ's Teams column). No individual
+# contacts get created for this firm as a result.
+#
+# The companies page (iconiq.com/growth/companies) is a Webflow site; the full
+# list renders server-side into the DOM as a CMS Collection List (no API call
+# needed), but oddly every company appears in the raw HTML *twice* -- same
+# name, same description, same href, exactly 2x for all 171 -- confirmed by
+# counting duplicates before writing the parser. Dedupe by company name.
+
+ICONIQ_BASE = "https://iconiqcapital.com"
+ICONIQ_COMPANIES_URL = "https://www.iconiq.com/growth/companies"
+
+
+def _iconiq_parse_companies(page_html: str) -> list[dict]:
+    soup = BeautifulSoup(page_html, "html.parser")
+    seen_names = set()
+    companies = []
+    for item in soup.select(".w-dyn-item"):
+        h2 = item.select_one("h2.heading-style-h3.is-companies")
+        if not h2:
+            continue
+        name = h2.get_text(strip=True)
+        if not name or name in seen_names:
+            continue
+        seen_names.add(name)
+
+        link = item.select_one("a.companies-list_grid-item-reveal-wrap")
+        website = link.get("href") if link else None
+        desc_el = item.select_one(".text-style-3lines.is-companies")
+        description = desc_el.get_text(strip=True) if desc_el else None
+
+        categories = [
+            p.get_text(strip=True)
+            for p in item.select('p[fs-cmsfilter-field="category"]')
+            if p.get_text(strip=True) and p.get_text(strip=True) != "All"
+        ]
+        companies.append({
+            "name": name,
+            "website": website,
+            "description": description,
+            "categories": categories,
+        })
+    return companies
+
+
+def scrape_iconiq_companies(sb: Client, dry_run: bool = False, limit: int | None = None) -> None:
+    """
+    Scrape ICONIQ's Venture & Growth portfolio (companies only -- see module
+    note above for why there's no team scraper for this firm). Writes:
+    companies, portfolio_investments, vertical_focus (from each company's
+    category tags, at the firm level).
+    """
+    org_name = "ICONIQ"
+
+    log.info("Fetching ICONIQ companies page")
+    page_html = fetch_rendered_html(ICONIQ_COMPANIES_URL)
+    companies = _iconiq_parse_companies(page_html)
+    log.info("Found %d ICONIQ portfolio companies", len(companies))
+
+    if limit:
+        companies = companies[:limit]
+
+    if dry_run:
+        log.info("[DRY-RUN] Would write %d ICONIQ companies", len(companies))
+        for c in companies[:5]:
+            log.info("  %s | %s | categories=%s | desc=%s", c["name"], c["website"], c["categories"], bool(c["description"]))
+        return
+
+    org_id = get_or_create_organization(sb, org_name, "Multi-Stage VC", ICONIQ_BASE)
+
+    inserted, skipped = 0, 0
+    for c in companies:
+        try:
+            company_id = upsert_company(sb, c["name"], c["website"], c["description"])
+            if not c["description"]:
+                log.warning("%s: no description found on site, inserted with null description", c["name"])
+
+            get_or_create_portfolio_investment(sb, org_id, company_id, None, None)
+
+            for category in c["categories"]:
+                vertical_id = get_or_create_vertical(sb, category)
+                get_or_create_vertical_focus(sb, org_id, vertical_id)
+
+            inserted += 1
+        except Exception:
+            log.exception("Failed processing ICONIQ company %r, skipping", c.get("name"))
+            skipped += 1
+
+    log.info("ICONIQ companies done: %d inserted/updated, %d skipped", inserted, skipped)
+
+
+# ---------------------------------------------------------------------------
+# Founders Fund
+# ---------------------------------------------------------------------------
+# By far the simplest scrape of the firms done so far: both companies and team
+# are official WordPress custom post types exposed at a public, undocumented
+# but stable REST API (/wp-json/wp/v2/company, /wp-json/wp/v2/team) -- no
+# Playwright, no per-profile page visits, no rate-limit concerns (confirmed via
+# the X-WP-Total header there are only 63 companies and 28 team members total,
+# both fit in a single page). This matches Firms.csv's own note that "data on
+# companies [is] quite sparse" -- Founders Fund publishes a curated highlight
+# list, not their full historical portfolio, but what they do publish is
+# unusually complete: 100% have a description, 97% have an industry tag and an
+# external website link.
+
+FOUNDERSFUND_BASE = "https://foundersfund.com"
+FOUNDERSFUND_API = f"{FOUNDERSFUND_BASE}/wp-json/wp/v2"
+
+
+def _foundersfund_fetch_all(post_type: str) -> list[dict]:
+    req = urllib.request.Request(
+        f"{FOUNDERSFUND_API}/{post_type}?per_page=100", headers={"User-Agent": USER_AGENT}
+    )
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        return _json.loads(resp.read())
+
+
+def _foundersfund_html_to_text(html_fragment: str) -> str | None:
+    text = BeautifulSoup(html_fragment or "", "html.parser").get_text(separator=" ").strip()
+    return text or None
+
+
+def _foundersfund_extract_website(profiles_html: str) -> str | None:
+    """The `profiles` field is a raw HTML snippet like
+    '<p><a href="http:///www.spacex.com/">Website</a></p>' -- note the stray
+    extra slash after the scheme, a site-side typo present across many
+    entries, normalized here rather than stored as-is."""
+    m = re.search(r'href="([^"]+)"', profiles_html or "")
+    if not m:
+        return None
+    url = m.group(1)
+    return re.sub(r"^(https?:)/{2,}", r"\1//", url)
+
+
+def scrape_foundersfund_companies(sb: Client, dry_run: bool = False, limit: int | None = None) -> None:
+    """
+    Scrape Founders Fund's portfolio via their public WordPress REST API.
+    Writes: companies (name, website, description), portfolio_investments,
+    vertical_focus (from each company's industry tag, at the firm level --
+    no per-deal partner attribution is published here either).
+    """
+    import html
+
+    org_name = "Founders Fund"
+
+    log.info("Fetching Founders Fund companies from REST API")
+    companies = _foundersfund_fetch_all("company")
+    log.info("Found %d Founders Fund portfolio companies", len(companies))
+
+    if limit:
+        companies = companies[:limit]
+
+    if dry_run:
+        log.info("[DRY-RUN] Would write %d Founders Fund companies", len(companies))
+        for c in companies[:5]:
+            name = c.get("title", {}).get("rendered")
+            desc = _foundersfund_html_to_text(c.get("content", {}).get("rendered"))
+            website = _foundersfund_extract_website(c.get("profiles"))
+            industry = html.unescape(c.get("industry") or "") or None
+            log.info("  %s | %s | industry=%s | desc=%s", name, website, industry, bool(desc))
+        return
+
+    org_id = get_or_create_organization(sb, org_name, "Multi-Stage VC", FOUNDERSFUND_BASE)
+
+    inserted, skipped = 0, 0
+    for c in companies:
+        try:
+            name = (c.get("title", {}).get("rendered") or "").strip()
+            if not name:
+                skipped += 1
+                continue
+            description = _foundersfund_html_to_text(c.get("content", {}).get("rendered"))
+            website = _foundersfund_extract_website(c.get("profiles"))
+            company_id = upsert_company(sb, name, website, description)
+            if not description:
+                log.warning("%s: no description found on site, inserted with null description", name)
+
+            get_or_create_portfolio_investment(sb, org_id, company_id, None, None)
+
+            industry = html.unescape(c.get("industry") or "").strip()
+            if industry:
+                vertical_id = get_or_create_vertical(sb, industry)
+                get_or_create_vertical_focus(sb, org_id, vertical_id)
+
+            inserted += 1
+        except Exception:
+            log.exception("Failed processing Founders Fund company %r, skipping", c.get("title"))
+            skipped += 1
+
+    log.info("Founders Fund companies done: %d inserted/updated, %d skipped", inserted, skipped)
+
+
+# Non-investing back-office roles observed in the team API (CFO, General
+# Counsel, Controller, IT, etc.) are excluded; anything with "partner" or
+# "associate" in the title is kept.
+def _foundersfund_is_investing_role(subtitle: str) -> bool:
+    role_lower = (subtitle or "").lower()
+    return "partner" in role_lower or role_lower == "associate"
+
+
+def scrape_foundersfund_team(sb: Client, dry_run: bool = False, limit: int | None = None) -> None:
+    """
+    Scrape Founders Fund's investing team via their public WordPress REST API
+    -- bio, role, and Twitter are all in the same response, no per-profile
+    page visits needed. Writes: organization, contacts (bio/Twitter/role).
+    """
+    org_name = "Founders Fund"
+    entity_type = "Multi-Stage VC"
+
+    log.info("Fetching Founders Fund team from REST API")
+    all_members = _foundersfund_fetch_all("team")
+    investing = [m for m in all_members if _foundersfund_is_investing_role(m.get("subtitle"))]
+    log.info("Found %d investing team members (of %d total)", len(investing), len(all_members))
+
+    if limit:
+        investing = investing[:limit]
+
+    if dry_run:
+        log.info("[DRY-RUN] Would write %d Founders Fund contacts", len(investing))
+        for m in investing:
+            log.info("  %s | %s", m.get("title", {}).get("rendered"), m.get("subtitle"))
+        return
+
+    org_id = get_or_create_organization(sb, org_name, entity_type, FOUNDERSFUND_BASE)
+
+    for member in investing:
+        try:
+            name = (member.get("title", {}).get("rendered") or "").strip()
+            if not name:
+                continue
+            contact_id = get_or_create_contact(sb, org_id, name)
+            bio = _foundersfund_html_to_text(member.get("content", {}).get("rendered"))
+            twitter_handle = (member.get("twitter") or "").strip()
+            twitter_url = f"https://twitter.com/{twitter_handle}" if twitter_handle else None
+
+            update_contact_profile(
+                sb, contact_id,
+                bio=bio,
+                email=None,
+                role=member.get("subtitle") or None,
+                linkedin_url=None,
+                other_sites={"twitter": twitter_url} if twitter_url else None,
+            )
+            log.info("Wrote %s | %s | bio=%s", name, member.get("subtitle"), bool(bio))
+        except Exception:
+            log.exception("Failed writing Founders Fund contact %r, skipping", member.get("title"))
+
+
+# ---------------------------------------------------------------------------
+# Lightspeed
+# ---------------------------------------------------------------------------
+# The companies grid (lsvp.com/companies/) server-renders all ~666 portfolio
+# companies in one page load (no scroll/API pagination needed -- confirmed by
+# checking for XHR requests on scroll), with real structured fields per card:
+# stage invested, year backed, status. No description or external website is
+# in the grid itself, though -- those only live on each company's own
+# lsvp.com/company/<slug>/ page, which would mean 666 individual page visits.
+# Deliberately deferred (see investor_scraper/DESCRIPTION_GAPS.md) rather than
+# spending ~2 hours of courtesy-delayed crawling in this pass; the structured
+# stage/year data is captured now since it's free.
+#
+# The team page (lsvp.com/lightspeed-team/) is the opposite: rich per-member
+# grid (name, role, location) but no bio/social there -- those require
+# visiting each of the ~103 individual lsvp.com/team-member/<slug>/ pages,
+# which (unlike the company pages) work fine with a plain HTTP GET.
+
+LIGHTSPEED_BASE = "https://lsvp.com"
+LIGHTSPEED_COMPANIES_URL = f"{LIGHTSPEED_BASE}/companies/?location=all&sector=all&investments=lsvp%2Clsip"
+LIGHTSPEED_TEAM_URL = f"{LIGHTSPEED_BASE}/lightspeed-team/"
+
+# Only genuine funding-round labels map to our STAGE_VOCABULARY-shaped text;
+# "Common"/"Ordinary" are share classes, not rounds, so they're left as None.
+_LIGHTSPEED_STAGE_MAP = {
+    "pre-seed": "Pre-Seed",
+    "seed": "Seed", "seed-1": "Seed", "seed-2": "Seed",
+    "series a": "Series A", "a-1": "Series A", "early": "Series A",
+    "series b": "Series B",
+    "series c": "Series C+", "series d": "Series C+", "series e": "Series C+",
+    "series f": "Series C+", "series g": "Series C+", "series h": "Series C+",
+    "series i": "Series C+",
+}
+
+# Roles containing "partner" or "co-founder" that are actually operating/back-
+# office functions, not investing partners (Lightspeed's team grid mixes both
+# under similar-looking titles -- e.g. "Operating Partner, Technology",
+# "Partner, Legal"). Excluded by keyword since there's no clean role_id/group
+# field like a16z's team payload had.
+_LIGHTSPEED_NON_INVESTING_ROLE_KEYWORDS = (
+    "legal", "talent", "hr", "human resources", "marketing", "compliance",
+    "controller", "cfo", "ciso", "business officer", "investor relations",
+    "communications", "people,", "culture", "fundraising", "capital markets",
+    "data science", "operating", "production", "value creation", "engagement",
+    "new media",
+)
+
+
+def _lightspeed_is_investing_role(role: str) -> bool:
+    role_lower = role.lower()
+    if "partner" not in role_lower and "co-founder" not in role_lower:
+        return False
+    return not any(kw in role_lower for kw in _LIGHTSPEED_NON_INVESTING_ROLE_KEYWORDS)
+
+
+def _lightspeed_parse_companies(page_html: str) -> list[dict]:
+    soup = BeautifulSoup(page_html, "html.parser")
+    companies = []
+    for li in soup.select("li[data-company-id]"):
+        name_el = li.select_one(".detail h5")
+        if not name_el:
+            continue
+        # Some names carry a hover tooltip ("LSVP and LSIP Investment") noting
+        # which of Lightspeed's funds invested -- it's a nested span inside the
+        # <h5>, so a naive get_text() concatenates it straight onto the name
+        # (e.g. "ZetwerkLSVP and LSIP Investment"). Strip it before reading text.
+        info_icon = name_el.select_one(".info-icon-wrapper")
+        if info_icon:
+            info_icon.decompose()
+        info = {}
+        for row in li.select("ul.company-info-list li"):
+            strong, span = row.find("strong"), row.find("span")
+            if strong and span:
+                info[strong.get_text(strip=True)] = span.get_text(strip=True)
+        year_backed = info.get("BackedSince", "").strip()
+        companies.append({
+            "name": name_el.get_text(strip=True),
+            "stage": info.get("StageInvested", "").strip(),
+            "year_partnered": int(year_backed) if year_backed.isdigit() else None,
+        })
+    return companies
+
+
+def scrape_lightspeed_companies(sb: Client, dry_run: bool = False, limit: int | None = None) -> None:
+    """
+    Scrape Lightspeed portfolio companies from the server-rendered companies
+    grid. Writes: companies (name only -- no description/website; see module
+    docstring above), portfolio_investments (stage, year backed).
+    """
+    org_name = "Lightspeed"
+
+    log.info("Fetching Lightspeed companies page")
+    page_html = fetch_rendered_html(LIGHTSPEED_COMPANIES_URL)
+    companies = _lightspeed_parse_companies(page_html)
+    log.info("Found %d Lightspeed portfolio companies", len(companies))
+
+    if limit:
+        companies = companies[:limit]
+
+    if dry_run:
+        log.info("[DRY-RUN] Would write %d Lightspeed companies", len(companies))
+        for c in companies[:5]:
+            log.info("  %s | stage=%s | year=%s", c["name"], c["stage"], c["year_partnered"])
+        return
+
+    org_id = get_or_create_organization(sb, org_name, "Multi-Stage VC", LIGHTSPEED_BASE)
+
+    inserted, skipped = 0, 0
+    for c in companies:
+        try:
+            if not c["name"]:
+                skipped += 1
+                continue
+            company_id = upsert_company(sb, c["name"], None, None)
+            stage_label = _LIGHTSPEED_STAGE_MAP.get(c["stage"].lower())
+            get_or_create_portfolio_investment(sb, org_id, company_id, stage_label or c["stage"] or None, c["year_partnered"])
+            inserted += 1
+            if inserted % 100 == 0:
+                log.info("Processed %d/%d Lightspeed companies", inserted, len(companies))
+        except Exception:
+            log.exception("Failed processing Lightspeed company %r, skipping", c.get("name"))
+            skipped += 1
+
+    log.info("Lightspeed companies done: %d inserted/updated, %d skipped", inserted, skipped)
+
+
+def _lightspeed_parse_team_grid(page_html: str) -> list[dict]:
+    soup = BeautifulSoup(page_html, "html.parser")
+    members = []
+    for card in soup.select("a.teamcard"):
+        name_el = card.select_one(".text-primary-link--bold")
+        detail_el = card.select_one(".text-details--reg .text-details--reg") or card.select_one(".text-details--reg")
+        if not name_el or not detail_el:
+            continue
+        role = detail_el.get_text(strip=True).split("//")[0].strip()
+        members.append({
+            "name": name_el.get_text(strip=True),
+            "role": role,
+            "profile_url": card.get("href"),
+        })
+    return members
+
+
+def _lightspeed_fetch_bio_and_socials(profile_url: str) -> tuple[str | None, str | None, str | None]:
+    """Fetch a team-member page (plain HTTP works here, unlike /company/ pages)
+    and pull bio paragraphs + personal LinkedIn/Twitter. The bio is every
+    unique <p> in main up to the legal disclaimer paragraph -- the page
+    repeats the first paragraph once in a hidden duplicate node."""
+    req = urllib.request.Request(profile_url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(req, timeout=20) as resp:
+        page_html = resp.read().decode("utf-8", errors="ignore")
+    soup = BeautifulSoup(page_html, "html.parser")
+
+    paragraphs, seen = [], set()
+    for p in soup.select("main p"):
+        parent_class = " ".join(p.parent.get("class") or [])
+        if "disclaimer" in parent_class:
+            break
+        text = p.get_text(strip=True)
+        if not text or text in seen:
+            continue
+        seen.add(text)
+        paragraphs.append(text)
+    bio = "\n\n".join(paragraphs) or None
+
+    linkedin_url, twitter_url = None, None
+    for a in soup.find_all("a", href=True):
+        href = a["href"]
+        if "linkedin.com/in/" in href and not linkedin_url:
+            linkedin_url = href
+        elif ("twitter.com/" in href or "x.com/" in href) and "lightspeed" not in href.lower() and not twitter_url:
+            twitter_url = href
+
+    return bio, linkedin_url, twitter_url
+
+
+def scrape_lightspeed_team(sb: Client, dry_run: bool = False, limit: int | None = None) -> None:
+    """
+    Scrape Lightspeed's investing team from the team grid (name, role), then
+    visit each member's own profile page for bio + LinkedIn/Twitter (not in
+    the grid itself). Writes: organization, contacts (bio/LinkedIn/role).
+    No structured verticals are published here (unlike a16z), so vertical
+    inference for these contacts falls back to bio-embedding matching.
+    """
+    org_name = "Lightspeed"
+    entity_type = "Multi-Stage VC"
+
+    log.info("Fetching Lightspeed team page")
+    page_html = fetch_rendered_html(LIGHTSPEED_TEAM_URL)
+    all_members = _lightspeed_parse_team_grid(page_html)
+    investing = [m for m in all_members if _lightspeed_is_investing_role(m["role"])]
+    log.info("Found %d investing team members (of %d total)", len(investing), len(all_members))
+
+    if limit:
+        investing = investing[:limit]
+
+    if dry_run:
+        log.info("[DRY-RUN] Would write %d Lightspeed contacts", len(investing))
+        for m in investing:
+            log.info("  %s | %s", m["name"], m["role"])
+        return
+
+    org_id = get_or_create_organization(sb, org_name, entity_type, LIGHTSPEED_BASE)
+
+    for member in investing:
+        try:
+            name = member["name"].strip()
+            if not name:
+                continue
+            contact_id = get_or_create_contact(sb, org_id, name)
+
+            bio, linkedin_url, twitter_url = None, None, None
+            if member["profile_url"]:
+                try:
+                    bio, linkedin_url, twitter_url = _lightspeed_fetch_bio_and_socials(member["profile_url"])
+                except Exception:
+                    log.warning("Could not fetch profile for %s at %s", name, member["profile_url"])
+                time.sleep(CRAWL_DELAY_SECONDS)
+
+            update_contact_profile(
+                sb, contact_id,
+                bio=bio,
+                email=None,
+                role=member["role"] or None,
+                linkedin_url=linkedin_url,
+                other_sites={"twitter": twitter_url} if twitter_url else None,
+            )
+            log.info("Wrote %s | %s | bio=%s", name, member["role"], bool(bio))
+        except Exception:
+            log.exception("Failed writing Lightspeed contact %r, skipping", member.get("name"))
+
+
+# ---------------------------------------------------------------------------
+# GV (Google Ventures)
+# ---------------------------------------------------------------------------
+
+GV_BASE = "https://www.gv.com"
+_GV_API = f"{GV_BASE}/api/cms/query"
+
+
+def _gv_api_fetch_all(query_type: str, sort_field: str = "firstName", page_size: int = 100) -> list[dict]:
+    """Paginate through the GV Sanity CMS API for a given content type."""
+    from urllib.parse import quote as _urlencode
+    import html as _html
+    items: list[dict] = []
+    skip = 0
+    while True:
+        opts = {"sort": sort_field, "skip": skip, "limit": page_size}
+        url = f"{_GV_API}?type={query_type}&opts={_urlencode(_json.dumps(opts))}"
+        req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            data = _json.loads(resp.read())
+        items.extend(data["items"])
+        if skip + page_size >= data["total"]:
+            break
+        skip += page_size
+        time.sleep(0.3)
+    return items
+
+
+def _flatten_gv_bio(bio_blocks: list[dict] | None) -> str | None:
+    """Flatten Sanity portable-text blocks to a plain string."""
+    paragraphs: list[str] = []
+    for block in (bio_blocks or []):
+        if block.get("_type") != "block":
+            continue
+        text = " ".join(
+            child.get("text", "")
+            for child in (block.get("children") or [])
+            if isinstance(child, dict)
+        ).strip()
+        if text:
+            paragraphs.append(text)
+    return "\n\n".join(paragraphs) or None
+
+
+def _get_or_create_contact_vertical(sb: Client, contact_id: str, vertical_id: str) -> None:
+    existing = (
+        sb.table("contact_verticals")
+        .select("id")
+        .eq("contact_id", contact_id)
+        .eq("vertical_id", vertical_id)
+        .execute()
+    )
+    if existing.data:
+        return
+    sb.table("contact_verticals").insert(
+        {"contact_id": contact_id, "vertical_id": vertical_id}
+    ).execute()
+
+
+def scrape_gv_team(sb: Client, dry_run: bool = False, limit: int | None = None) -> None:
+    """
+    Scrape GV (Google Ventures) investing team from their Sanity CMS API.
+    Writes: organization, contacts (bio/LinkedIn/role), contact_verticals (sectors).
+    Only includes 'Investing Team' members — skips Ops, Advisors, and unassigned.
+    """
+    import html as _html
+
+    org_name = "GV"
+    entity_type = "Multi-Stage VC"
+
+    log.info("Fetching GV team members from CMS API")
+    all_members = _gv_api_fetch_all("teamMember")
+    investing = [m for m in all_members if "Investing Team" in (m.get("team") or [])]
+    log.info("Found %d investing team members (of %d total)", len(investing), len(all_members))
+
+    if limit:
+        investing = investing[:limit]
+
+    if dry_run:
+        log.info("[DRY-RUN] Would write %d GV contacts", len(investing))
+        for m in investing:
+            log.info("  %s | %s | linkedin=%s | sectors=%s",
+                     m.get("fullName"), m.get("jobTitle"),
+                     bool(m.get("linkedin")), m.get("sector"))
+        return
+
+    org_id = get_or_create_organization(sb, org_name, entity_type, GV_BASE)
+
+    for member in investing:
+        try:
+            raw_name = (member.get("fullName") or "").strip()
+            name = _html.unescape(raw_name)
+            if not name:
+                continue
+            contact_id = get_or_create_contact(sb, org_id, name)
+            bio = _flatten_gv_bio(member.get("bio"))
+            update_contact_profile(
+                sb, contact_id,
+                bio=bio,
+                email=None,
+                role=member.get("jobTitle") or None,
+                linkedin_url=member.get("linkedin") or None,
+                other_sites=None,
+            )
+            for sector in (member.get("sector") or []):
+                sector = sector.strip()
+                if not sector:
+                    continue
+                vertical_id = get_or_create_vertical(sb, sector)
+                _get_or_create_contact_vertical(sb, contact_id, vertical_id)
+            log.info("Wrote %s | %s | sectors=%s", name, member.get("jobTitle"), member.get("sector"))
+        except Exception:
+            log.exception("Failed writing GV contact %r, skipping", member.get("fullName"))
+
+
+def scrape_gv_companies(sb: Client, dry_run: bool = False, limit: int | None = None) -> None:
+    """
+    Scrape GV portfolio companies and link them to GV investors.
+    Writes: companies, portfolio_investments, contact_investments.
+    Requires scrape_gv_team to have been run first.
+    """
+    import html as _html
+
+    org_name = "GV"
+
+    log.info("Fetching GV portfolio companies from CMS API")
+    companies = _gv_api_fetch_all("company", sort_field="name")
+    log.info("Found %d GV portfolio companies", len(companies))
+
+    # Rebuild CMS ID → (first, last) from the team API so we can resolve investor refs
+    log.info("Fetching GV team to resolve investor references")
+    all_members = _gv_api_fetch_all("teamMember")
+    cms_id_to_name: dict[str, tuple[str, str]] = {}
+    for m in all_members:
+        if "Investing Team" not in (m.get("team") or []):
+            continue
+        raw_name = _html.unescape((m.get("fullName") or "").strip())
+        if not raw_name:
+            continue
+        parts = raw_name.split(" ", 1)
+        first = parts[0]
+        last = parts[1] if len(parts) > 1 else ""
+        cms_id_to_name[m["_id"]] = (first, last)
+
+    org_res = sb.table("organizations").select("id").eq("name", org_name).execute()
+    if not org_res.data:
+        log.error("GV organization not found in DB — run 'team gv' first")
+        return
+    org_id = org_res.data[0]["id"]
+
+    contacts_res = sb.table("contacts").select("id, first_name, last_name").eq("org_id", org_id).execute()
+    name_to_contact_id: dict[tuple[str, str], str] = {
+        (r["first_name"], r["last_name"]): r["id"]
+        for r in (contacts_res.data or [])
+    }
+    log.info("Loaded %d GV contacts from DB for cross-referencing", len(name_to_contact_id))
+
+    if limit:
+        companies = companies[:limit]
+
+    if dry_run:
+        log.info("[DRY-RUN] Would write %d GV companies", len(companies))
+        return
+
+    inserted = 0
+    for co in companies:
+        try:
+            co_name = (co.get("name") or "").strip()
+            if not co_name:
+                continue
+            co_website = co.get("website") or None
+            company_id = upsert_company(sb, co_name, co_website, None)
+            get_or_create_portfolio_investment(sb, org_id, company_id, None)
+
+            for inv_ref in (co.get("investors") or []):
+                cms_id = inv_ref.get("_ref")
+                if not cms_id:
+                    continue
+                name_parts = cms_id_to_name.get(cms_id)
+                if not name_parts:
+                    continue
+                contact_id = name_to_contact_id.get(name_parts)
+                if not contact_id:
+                    continue
+                get_or_create_contact_investment(sb, contact_id, company_id, "current", None)
+
+            inserted += 1
+            if inserted % 100 == 0:
+                log.info("Processed %d/%d GV companies", inserted, len(companies))
+        except Exception:
+            log.exception("Failed processing GV company %r, skipping", co.get("name"))
+
+    log.info("GV companies done: %d processed", inserted)
+
+
+# ---------------------------------------------------------------------------
+# Bessemer Venture Partners (BVP)
+# ---------------------------------------------------------------------------
+# The richest source of any firm scraped so far: bvp.com/portfolio
+# server-renders every portfolio company as a self-contained <article
+# class="box investment"> card (521 of them, one per company, no duplicates)
+# that already carries description, website, sector tags, founded/partnered
+# years, AND the names of the specific BVP partners tied to that company --
+# no per-company page visits needed at all, and a plain HTTP GET returns the
+# full grid (confirmed: no JS rendering required). The page's own "420+
+# portfolio companies" copy undercounts the true total (521) -- just
+# marketing rounding, not a discrepancy worth chasing.
+#
+# There's no funding-round vocabulary published (no "Series A" style field),
+# only "Founded" and "Partnered" years, so investment_stage is left null
+# here; "Partnered" maps to year_partnered.
+#
+# Because each company card already names its BVP investors (with links to
+# their own bvp.com/team/<slug> profile), we get genuine per-deal
+# attribution for free -- contact_investments rows are written directly from
+# the companies scrape (stub contacts if the team scrape hasn't run yet; the
+# team scrape below fills in role/bio/LinkedIn for the same org+name pair
+# afterward via the same idempotent get_or_create_contact() used elsewhere).
+#
+# The team page (bvp.com/team) is also plain-HTTP-GET-able and exposes a
+# clean data-types attribute per card ("investor" / "operations" /
+# "operating_advisor") -- the cleanest investing-role filter of any firm
+# scraped so far, no keyword heuristics needed. Bios/role/LinkedIn require
+# one visit per profile page (also plain HTTP GET, no Playwright).
+
+BVP_BASE = "https://www.bvp.com"
+BVP_PORTFOLIO_URL = f"{BVP_BASE}/portfolio"
+BVP_TEAM_URL = f"{BVP_BASE}/team"
+
+
+def _bvp_fetch(url: str) -> str:
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return resp.read().decode("utf-8", errors="ignore")
+
+
+def _bvp_parse_companies(page_html: str) -> list[dict]:
+    soup = BeautifulSoup(page_html, "html.parser")
+    companies = []
+    for card in soup.select("article.investment"):
+        name_el = card.select_one(".company .name a")
+        if not name_el:
+            continue
+        name = name_el.get_text(strip=True)
+
+        # A ticker (NASDAQ: X) or "ACQUIRED BY"/"MERGED WITH" badge means this
+        # is an exit, not an active portfolio company -- mirrors the
+        # current/previous relationship vocabulary used for every other firm.
+        enduring_el = card.select_one(".company .enduring-text")
+        exit_note = enduring_el.get_text(strip=True) if enduring_el else None
+
+        sectors = [a.get_text(strip=True) for a in card.select(".main-meta a.roadmap")]
+
+        details = card.select_one(".details .content")
+        description = None
+        website = None
+        investors: list[str] = []
+        year_partnered = None
+        if details:
+            intro = details.select_one(".intro")
+            if intro:
+                description = intro.get_text(" ", strip=True) or None
+
+            cta = details.select_one(".ctas a.cta")
+            if cta and cta.get("href"):
+                website = cta["href"]
+
+            for a in details.select(".meta .investors a.team"):
+                investor_name = a.get_text(strip=True)
+                if investor_name:
+                    investors.append(investor_name)
+
+            partnered_el = details.select_one(".meta .partnered .year")
+            if partnered_el and partnered_el.get_text(strip=True).isdigit():
+                year_partnered = int(partnered_el.get_text(strip=True))
+
+        companies.append({
+            "name": name,
+            "description": description,
+            "website": website,
+            "sectors": sectors,
+            "investors": investors,
+            "year_partnered": year_partnered,
+            "exit_note": exit_note,
+        })
+    return companies
+
+
+def scrape_bvp_companies(sb: Client, dry_run: bool = False, limit: int | None = None) -> None:
+    """
+    Scrape Bessemer Venture Partners' portfolio grid. Writes: companies
+    (name, website, description), portfolio_investments (year_partnered
+    only -- no stage vocabulary is published), vertical_focus (from each
+    company's sector tags), contacts + contact_investments (from the named
+    BVP investors on each company card -- genuine per-deal attribution,
+    relationship set to "previous" when a ticker/"acquired by" badge marks
+    the company as an exit, "current" otherwise).
+    """
+    org_name = "Bessemer Venture Partners"
+
+    log.info("Fetching BVP portfolio page")
+    page_html = _bvp_fetch(BVP_PORTFOLIO_URL)
+    companies = _bvp_parse_companies(page_html)
+    log.info("Found %d BVP portfolio companies", len(companies))
+
+    if limit:
+        companies = companies[:limit]
+
+    if dry_run:
+        log.info("[DRY-RUN] Would write %d BVP companies", len(companies))
+        for c in companies[:5]:
+            log.info("  %s | sectors=%s | year=%s | investors=%s | website=%s",
+                     c["name"], c["sectors"], c["year_partnered"], c["investors"], c["website"])
+        return
+
+    org_id = get_or_create_organization(sb, org_name, "Multi-Stage VC", BVP_BASE)
+
+    inserted, skipped = 0, 0
+    for c in companies:
+        try:
+            name = c["name"].strip()
+            if not name:
+                skipped += 1
+                continue
+            company_id = upsert_company(sb, name, c["website"], c["description"])
+            if not c["description"]:
+                log.warning("%s: no description found on site, inserted with null description", name)
+
+            get_or_create_portfolio_investment(sb, org_id, company_id, None, c["year_partnered"])
+
+            relationship = "previous" if c["exit_note"] else "current"
+            for investor_name in c["investors"]:
+                contact_id = get_or_create_contact(sb, org_id, investor_name)
+                get_or_create_contact_investment(sb, contact_id, company_id, relationship, c["exit_note"])
+
+            for sector in c["sectors"]:
+                vertical_id = get_or_create_vertical(sb, sector)
+                get_or_create_vertical_focus(sb, org_id, vertical_id)
+
+            inserted += 1
+            if inserted % 100 == 0:
+                log.info("Processed %d/%d BVP companies", inserted, len(companies))
+        except Exception:
+            log.exception("Failed processing BVP company %r, skipping", c.get("name"))
+            skipped += 1
+
+    log.info("BVP companies done: %d inserted/updated, %d skipped", inserted, skipped)
+
+
+_BVP_INVESTING_DATA_TYPES = {"investor"}
+
+
+def _bvp_parse_team_grid(page_html: str) -> list[dict]:
+    soup = BeautifulSoup(page_html, "html.parser")
+    members = []
+    for card in soup.select("a.box.team-member"):
+        if card.get("data-types") not in _BVP_INVESTING_DATA_TYPES:
+            continue
+        name_el = card.select_one(".name")
+        href = card.get("href")
+        if not name_el or not href:
+            continue
+        members.append({
+            "name": name_el.get_text(strip=True),
+            "profile_url": href,
+        })
+    return members
+
+
+def _bvp_fetch_bio(profile_url: str) -> dict:
+    page_html = _bvp_fetch(profile_url)
+    soup = BeautifulSoup(page_html, "html.parser")
+
+    role_el = soup.select_one(".bio-details .role")
+    role = role_el.get_text(strip=True) if role_el else None
+
+    bio = None
+    bio_container = soup.select_one(".bio-text")
+    if bio_container:
+        paragraphs = [p.get_text(" ", strip=True) for p in bio_container.find_all("p")]
+        bio = "\n\n".join(p for p in paragraphs if p) or None
+
+    linkedin_url = None
+    for a in soup.select(".social a.social-icon.linkedin"):
+        if a.get("href"):
+            linkedin_url = a["href"]
+            break
+
+    return {"role": role, "bio": bio, "linkedin_url": linkedin_url}
+
+
+def scrape_bvp_team(sb: Client, dry_run: bool = False, limit: int | None = None) -> None:
+    """
+    Scrape BVP's investing team (team page filtered to data-types="investor"
+    cards -- operations/operating_advisor staff excluded), then visit each
+    member's own profile page for role/bio/LinkedIn. Writes: organization,
+    contacts (bio/role/LinkedIn). Contacts may already be stubbed in by
+    scrape_bvp_companies() via the per-company investor links; this fills in
+    the rest of their profile on the same org+name row.
+    """
+    org_name = "Bessemer Venture Partners"
+    entity_type = "Multi-Stage VC"
+
+    log.info("Fetching BVP team page")
+    page_html = _bvp_fetch(BVP_TEAM_URL)
+    members = _bvp_parse_team_grid(page_html)
+    log.info("Found %d BVP investing team members", len(members))
+
+    if limit:
+        members = members[:limit]
+
+    if dry_run:
+        log.info("[DRY-RUN] Would write %d BVP contacts", len(members))
+        for m in members[:5]:
+            log.info("  %s | %s", m["name"], m["profile_url"])
+        return
+
+    org_id = get_or_create_organization(sb, org_name, entity_type, BVP_BASE)
+
+    for member in members:
+        try:
+            name = member["name"].strip()
+            if not name:
+                continue
+            contact_id = get_or_create_contact(sb, org_id, name)
+
+            profile: dict = {}
+            if member["profile_url"]:
+                try:
+                    profile = _bvp_fetch_bio(member["profile_url"])
+                except Exception:
+                    log.warning("Could not fetch profile for %s at %s", name, member["profile_url"])
+                time.sleep(CRAWL_DELAY_SECONDS)
+
+            update_contact_profile(
+                sb, contact_id,
+                bio=profile.get("bio"),
+                email=None,
+                role=profile.get("role"),
+                linkedin_url=profile.get("linkedin_url"),
+                other_sites=None,
+            )
+            log.info("Wrote %s | %s | bio=%s", name, profile.get("role"), bool(profile.get("bio")))
+        except Exception:
+            log.exception("Failed writing BVP contact %r, skipping", member.get("name"))
+
+
+# ---------------------------------------------------------------------------
+# Khosla Ventures
+# ---------------------------------------------------------------------------
+# The portfolio page (khoslaventures.com/portfolio) is a Webflow site whose
+# company grid is populated client-side into Splide carousels (needs
+# fetch_rendered_html, unlike the team page below) -- one carousel per
+# sector, e.g. "Consumer & Retail", "Fintech", "Digital Health". Each
+# carousel renders every real card twice for its infinite-loop effect (same
+# clone-duplication shape as ICONIQ's grid), so companies are deduped by
+# href within each sector section (confirmed no company appears in more
+# than one sector's section). This is a curated "spotlight" page (132
+# unique companies after dedup, no "view all" link found anywhere) rather
+# than Khosla's full portfolio history -- same kind of curated-subset
+# scope decision as other firms' sparser sources. Each card gives name,
+# external website (the card's own href), and a one-line tagline (used as
+# description) -- no stage or year-partnered data is published here.
+#
+# The team page (khoslaventures.com/team) is plain-HTTP-GET-able (both the
+# grid and each /team/<slug> bio page) and is divided into four named
+# category sections via in-page anchors: "Managing Directors", "Investors",
+# "Operators", "Platform". Only the first two are genuinely investing-track
+# (mirrors BVP's investor/operating_advisor split) -- Operators/Platform are
+# operational support staff, excluded. No role field is given directly;
+# each bio's opening sentence reliably reads "<Name> is a/an <ROLE> at
+# Khosla Ventures" (confirmed against several profiles), so role is
+# regex-extracted from there, falling back to a generic label derived from
+# the category section if a bio doesn't match that phrasing.
+
+KHOSLA_BASE = "https://www.khoslaventures.com"
+KHOSLA_PORTFOLIO_URL = f"{KHOSLA_BASE}/portfolio"
+KHOSLA_TEAM_URL = f"{KHOSLA_BASE}/team"
+
+_KHOSLA_INVESTING_CATEGORY_IDS = {
+    "managing-directors": "Managing Director",
+    "investors": "Investor",
+}
+
+_KHOSLA_ROLE_RE = re.compile(r"^\S+\s+is an?\s+(.+?)\s+at Khosla Ventures\b")
+
+
+def _khosla_fetch(url: str) -> str:
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return resp.read().decode("utf-8", errors="ignore")
+
+
+def _khosla_name_from_website(website: str) -> str | None:
+    """
+    Fallback for the ~90% of cards whose <img alt> is empty (confirmed not a
+    lazy-load timing issue -- re-fetching with a full-page scroll to force
+    every image to load didn't change the empty-alt count) and whose CDN
+    asset filenames are too inconsistently formatted to regex-parse a name
+    out of reliably (mix of "KV_Highlight-Name.svg", "Name.avif",
+    "KVPortfolio_Category-Name-White-1.svg", etc.). The company's own
+    website domain is always present and gives an imperfect-but-safe name
+    (e.g. "ringcentral.com" -> "Ringcentral", losing internal caps) rather
+    than silently dropping ~90% of the portfolio.
+    """
+    netloc = urlparse(website).netloc
+    labels = netloc.split(".") if netloc else []
+    # Skip generic subdomain prefixes that aren't the brand itself (e.g.
+    # "about.gitlab.com" should yield "Gitlab", not "About"). Left as a
+    # short blocklist rather than a full public-suffix-list dependency --
+    # only 1 of Khosla's 132 companies hit this case.
+    generic_prefixes = {"www", "about", "blog", "app", "shop", "my", "join", "use", "try", "get"}
+    while len(labels) > 2 and labels[0] in generic_prefixes:
+        labels = labels[1:]
+    label = labels[0] if labels else ""
+    if not label:
+        return None
+    words = re.split(r"[-_]", label)
+    return " ".join(w.capitalize() for w in words if w) or None
+
+
+def _khosla_parse_companies(page_html: str) -> list[dict]:
+    soup = BeautifulSoup(page_html, "html.parser")
+    sections = soup.select("section.grid")
+
+    companies = []
+    pending_category = None
+    for section in sections:
+        title_el = section.select_one(".slider-title")
+        if title_el:
+            pending_category = title_el.get_text(strip=True)
+            continue
+
+        cards = section.select(".company-slide")
+        if not cards or not pending_category:
+            continue
+
+        seen_hrefs = set()
+        for card in cards:
+            href = card.get("href")
+            if not href or href in seen_hrefs:
+                continue
+            seen_hrefs.add(href)
+
+            img = card.select_one("img")
+            alt_name = (img.get("alt") or "").strip() if img else ""
+            name = alt_name or _khosla_name_from_website(href) or ""
+            tagline_el = card.select_one(".text-block-17")
+            tagline = tagline_el.get_text(strip=True) if tagline_el else None
+
+            companies.append({
+                "name": name,
+                "website": href,
+                "description": tagline,
+                "category": pending_category,
+            })
+        pending_category = None
+
+    return companies
+
+
+def scrape_khosla_companies(sb: Client, dry_run: bool = False, limit: int | None = None) -> None:
+    """
+    Scrape Khosla Ventures' portfolio spotlight page (per-sector Splide
+    carousels). Writes: companies (name, website, description -- the
+    card's one-line tagline), portfolio_investments (no stage/year
+    published), vertical_focus (from each company's sector section).
+    """
+    org_name = "Khosla Ventures"
+
+    log.info("Fetching Khosla Ventures portfolio page (rendered)")
+    page_html = fetch_rendered_html(KHOSLA_PORTFOLIO_URL)
+    companies = _khosla_parse_companies(page_html)
+    log.info("Found %d Khosla Ventures portfolio companies", len(companies))
+
+    if limit:
+        companies = companies[:limit]
+
+    if dry_run:
+        log.info("[DRY-RUN] Would write %d Khosla Ventures companies", len(companies))
+        for c in companies[:5]:
+            log.info("  %s | category=%s | website=%s | tagline=%s",
+                     c["name"], c["category"], c["website"], c["description"])
+        return
+
+    org_id = get_or_create_organization(sb, org_name, "Multi-Stage VC", KHOSLA_BASE)
+
+    inserted, skipped = 0, 0
+    for c in companies:
+        try:
+            name = c["name"].strip()
+            if not name:
+                log.warning("Skipping a company with no name and no website to derive one from (%r)", c.get("website"))
+                skipped += 1
+                continue
+            company_id = upsert_company(sb, name, c["website"], c["description"])
+            if not c["description"]:
+                log.warning("%s: no tagline found on site, inserted with null description", name)
+
+            get_or_create_portfolio_investment(sb, org_id, company_id, None, None)
+
+            if c["category"]:
+                vertical_id = get_or_create_vertical(sb, c["category"])
+                get_or_create_vertical_focus(sb, org_id, vertical_id)
+
+            inserted += 1
+        except Exception:
+            log.exception("Failed processing Khosla Ventures company %r, skipping", c.get("name"))
+            skipped += 1
+
+    log.info("Khosla Ventures companies done: %d inserted/updated, %d skipped", inserted, skipped)
+
+
+def _khosla_parse_team_grid(page_html: str) -> list[dict]:
+    soup = BeautifulSoup(page_html, "html.parser")
+    members = []
+    for section in soup.select("section.category-section"):
+        category_id = section.get("id")
+        fallback_role = _KHOSLA_INVESTING_CATEGORY_IDS.get(category_id)
+        if not fallback_role:
+            continue
+        for card in section.select(".team-member-item"):
+            a = card.select_one("a[href]")
+            name_el = card.select_one(".team-member-name")
+            if not a or not name_el:
+                continue
+            members.append({
+                "name": name_el.get_text(strip=True),
+                "profile_url": f"{KHOSLA_BASE}{a['href']}",
+                "fallback_role": fallback_role,
+            })
+    return members
+
+
+def _khosla_fetch_bio(profile_url: str, fallback_role: str) -> dict:
+    page_html = _khosla_fetch(profile_url)
+    soup = BeautifulSoup(page_html, "html.parser")
+
+    paragraphs = [p.get_text(" ", strip=True) for p in soup.select(".rich-text-blog p")]
+    bio = "\n\n".join(p for p in paragraphs if p) or None
+
+    role = fallback_role
+    if paragraphs:
+        m = _KHOSLA_ROLE_RE.match(paragraphs[0])
+        if m:
+            role = m.group(1)
+
+    linkedin_url = None
+    for a in soup.select(".div-block-25 a[href]"):
+        if "linkedin.com/in/" in a["href"]:
+            linkedin_url = a["href"]
+            break
+
+    return {"role": role, "bio": bio, "linkedin_url": linkedin_url}
+
+
+def scrape_khosla_team(sb: Client, dry_run: bool = False, limit: int | None = None) -> None:
+    """
+    Scrape Khosla Ventures' investing team (Managing Directors + Investors
+    category sections on the team page -- Operators/Platform excluded as
+    non-investing), then visit each member's own profile page for bio,
+    role (regex-extracted from the bio's opening sentence, falling back to
+    a generic category label), and LinkedIn. Writes: organization,
+    contacts (bio/role/LinkedIn).
+    """
+    org_name = "Khosla Ventures"
+    entity_type = "Multi-Stage VC"
+
+    log.info("Fetching Khosla Ventures team page")
+    page_html = _khosla_fetch(KHOSLA_TEAM_URL)
+    members = _khosla_parse_team_grid(page_html)
+    log.info("Found %d Khosla Ventures investing team members", len(members))
+
+    if limit:
+        members = members[:limit]
+
+    if dry_run:
+        log.info("[DRY-RUN] Would write %d Khosla Ventures contacts", len(members))
+        for m in members[:5]:
+            log.info("  %s | %s", m["name"], m["profile_url"])
+        return
+
+    org_id = get_or_create_organization(sb, org_name, entity_type, KHOSLA_BASE)
+
+    for member in members:
+        try:
+            name = member["name"].strip()
+            if not name:
+                continue
+            contact_id = get_or_create_contact(sb, org_id, name)
+
+            profile: dict = {}
+            if member["profile_url"]:
+                try:
+                    profile = _khosla_fetch_bio(member["profile_url"], member["fallback_role"])
+                except Exception:
+                    log.warning("Could not fetch profile for %s at %s", name, member["profile_url"])
+                time.sleep(CRAWL_DELAY_SECONDS)
+
+            update_contact_profile(
+                sb, contact_id,
+                bio=profile.get("bio"),
+                email=None,
+                role=profile.get("role"),
+                linkedin_url=profile.get("linkedin_url"),
+                other_sites=None,
+            )
+            log.info("Wrote %s | %s | bio=%s", name, profile.get("role"), bool(profile.get("bio")))
+        except Exception:
+            log.exception("Failed writing Khosla Ventures contact %r, skipping", member.get("name"))
+
+
+# ---------------------------------------------------------------------------
+# Ribbit Capital
+# ---------------------------------------------------------------------------
+# The sparsest source scraped so far, confirmed deliberately (not a
+# rendering bug): both ribbitcap.com/rebels (portfolio) and
+# ribbitcap.com/team are plain-HTTP-GET-able and fully server-rendered
+# (matches the CSV's own note: "the company and who owns it is on this
+# page but there is no company description"), but neither has ANY other
+# field -- no website, no sector/stage, no per-person href/role/bio
+# anywhere, and clicking a row (checked via Playwright on both pages) only
+# toggles a CSS selection state, no modal or API call. 149 unique
+# companies, 34 team members, both plain name lists.
+#
+# Each portfolio row's second column looked at first like Ribbit's own
+# deal partners, but cross-checking initials against the team roster gives
+# zero matches -- e.g. Affirm's row lists "Max L., Nathan G., Jeffrey K.,
+# Alex R.", which are that company's own founders (Max Levchin, Nathan
+# Gettings, Jeffrey Kaditz, Alex Rampell), not Ribbit staff. There's no
+# "founders" field in this schema's companies table and contacts/
+# contact_investments are specifically Ribbit's own team elsewhere in this
+# file, so writing these names there would misattribute someone else's
+# founders as Ribbit employees -- deliberately not scraped.
+#
+# No role/title exists anywhere on the team page either, so every contact
+# is written with role=None (no investing-vs-operating split is possible
+# here, unlike every other firm scraped so far).
+
+RIBBIT_BASE = "https://www.ribbitcap.com"
+RIBBIT_PORTFOLIO_URL = f"{RIBBIT_BASE}/rebels"
+RIBBIT_TEAM_URL = f"{RIBBIT_BASE}/team"
+
+
+def _ribbit_fetch(url: str) -> str:
+    req = urllib.request.Request(url, headers={"User-Agent": USER_AGENT})
+    with urllib.request.urlopen(req, timeout=30) as resp:
+        return resp.read().decode("utf-8", errors="ignore")
+
+
+def _ribbit_parse_row_names(page_html: str) -> list[str]:
+    soup = BeautifulSoup(page_html, "html.parser")
+    names = []
+    for row in soup.select('div.w-full.flex.flex-row.gap-4[data-type="scrollable-list-item"]'):
+        name_el = row.select_one("span.truncate")
+        if name_el:
+            names.append(name_el.get_text(strip=True))
+    return names
+
+
+def scrape_ribbit_companies(sb: Client, dry_run: bool = False, limit: int | None = None) -> None:
+    """
+    Scrape Ribbit Capital's portfolio list (name only -- no description,
+    website, sector, or stage is published anywhere on the source page).
+    Writes: companies (name), portfolio_investments (no stage/year).
+    """
+    org_name = "Ribbit Capital"
+
+    log.info("Fetching Ribbit Capital portfolio page")
+    page_html = _ribbit_fetch(RIBBIT_PORTFOLIO_URL)
+    names = _ribbit_parse_row_names(page_html)
+    log.info("Found %d Ribbit Capital portfolio companies", len(names))
+
+    if limit:
+        names = names[:limit]
+
+    if dry_run:
+        log.info("[DRY-RUN] Would write %d Ribbit Capital companies", len(names))
+        for n in names[:5]:
+            log.info("  %s", n)
+        return
+
+    org_id = get_or_create_organization(sb, org_name, "Multi-Stage VC", RIBBIT_BASE)
+
+    inserted, skipped = 0, 0
+    for name in names:
+        try:
+            name = name.strip()
+            if not name:
+                skipped += 1
+                continue
+            company_id = upsert_company(sb, name, None, None)
+            get_or_create_portfolio_investment(sb, org_id, company_id, None, None)
+            inserted += 1
+        except Exception:
+            log.exception("Failed processing Ribbit Capital company %r, skipping", name)
+            skipped += 1
+
+    log.info("Ribbit Capital companies done: %d inserted/updated, %d skipped", inserted, skipped)
+
+
+def scrape_ribbit_team(sb: Client, dry_run: bool = False, limit: int | None = None) -> None:
+    """
+    Scrape Ribbit Capital's team roster (name only -- no role, bio, or
+    LinkedIn is published anywhere on the source page, and no investing-
+    vs-operating distinction is possible). Writes: organization, contacts.
+    """
+    org_name = "Ribbit Capital"
+    entity_type = "Multi-Stage VC"
+
+    log.info("Fetching Ribbit Capital team page")
+    page_html = _ribbit_fetch(RIBBIT_TEAM_URL)
+    names = _ribbit_parse_row_names(page_html)
+    log.info("Found %d Ribbit Capital team members", len(names))
+
+    if limit:
+        names = names[:limit]
+
+    if dry_run:
+        log.info("[DRY-RUN] Would write %d Ribbit Capital contacts", len(names))
+        for n in names[:5]:
+            log.info("  %s", n)
+        return
+
+    org_id = get_or_create_organization(sb, org_name, entity_type, RIBBIT_BASE)
+
+    for name in names:
+        try:
+            name = name.strip()
+            if not name:
+                continue
+            get_or_create_contact(sb, org_id, name)
+            log.info("Wrote %s", name)
+        except Exception:
+            log.exception("Failed writing Ribbit Capital contact %r, skipping", name)
+
+
+# ---------------------------------------------------------------------------
 # Orchestration
 # ---------------------------------------------------------------------------
 
@@ -2182,12 +4056,31 @@ TEAM_SCRAPERS = {
     "yc": scrape_yc_partners,
     "tribeca": scrape_tribeca_team,
     "avvc": scrape_av_vc_team,
+    "gv": scrape_gv_team,
+    "a16z": scrape_a16z_team,
+    "lightspeed": scrape_lightspeed_team,
+    "foundersfund": scrape_foundersfund_team,
+    "kleinerperkins": scrape_kleinerperkins_team,
+    "nea": scrape_nea_team,
+    "bvp": scrape_bvp_team,
+    "khosla": scrape_khosla_team,
+    "ribbit": scrape_ribbit_team,
 }
 
 COMPANIES_SCRAPERS = {
     "yc": scrape_yc_companies,
     "tribeca": scrape_tribeca_companies,
     "avvc": scrape_av_vc_companies,
+    "a16z": scrape_a16z_companies,
+    "lightspeed": scrape_lightspeed_companies,
+    "gv": scrape_gv_companies,
+    "foundersfund": scrape_foundersfund_companies,
+    "kleinerperkins": scrape_kleinerperkins_companies,
+    "iconiq": scrape_iconiq_companies,
+    "nea": scrape_nea_companies,
+    "bvp": scrape_bvp_companies,
+    "khosla": scrape_khosla_companies,
+    "ribbit": scrape_ribbit_companies,
 }
 
 

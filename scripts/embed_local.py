@@ -43,9 +43,39 @@ def description_hash(text: str) -> str:
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
+def fetch_all(sb: Client, table: str, columns: str, order_col: str) -> list[dict]:
+    """
+    Paginate a table to completion instead of relying on a single unpaginated
+    select(), which PostgREST silently caps at its default row limit (1000) --
+    confirmed happening for company_embeddings once it passed 1000 rows: the
+    cache-hash lookup below was only ever seeing the first 1000 of 6000+ rows,
+    so ~5000 already-embedded companies looked "not yet cached" and got
+    needlessly re-embedded on every single run. order_col must be a unique
+    column (a primary key) so page boundaries are stable even with concurrent
+    inserts happening elsewhere (e.g. a scraper run) between page requests.
+    """
+    rows: list[dict] = []
+    page_size = 1000
+    offset = 0
+    while True:
+        page = (
+            sb.table(table)
+            .select(columns)
+            .order(order_col)
+            .range(offset, offset + page_size - 1)
+            .execute()
+            .data
+        )
+        rows.extend(page)
+        if len(page) < page_size:
+            break
+        offset += page_size
+    return rows
+
+
 def embed_missing_tags(sb: Client, model: SentenceTransformer) -> None:
-    verticals = sb.table("verticals").select("vertical_name").execute().data
-    cached = sb.table("vertical_tag_embeddings").select("tag").execute().data
+    verticals = fetch_all(sb, "verticals", "id, vertical_name", "id")
+    cached = fetch_all(sb, "vertical_tag_embeddings", "tag", "tag")
     cached_set = {row["tag"] for row in cached}
 
     all_tags = sorted({normalize_tag(v["vertical_name"]) for v in verticals if v["vertical_name"]})
@@ -63,23 +93,8 @@ def embed_missing_tags(sb: Client, model: SentenceTransformer) -> None:
 
 
 def embed_missing_companies(sb: Client, model: SentenceTransformer) -> None:
-    companies = []
-    page_size = 1000
-    offset = 0
-    while True:
-        page = (
-            sb.table("companies")
-            .select("id, description")
-            .range(offset, offset + page_size - 1)
-            .execute()
-            .data
-        )
-        companies.extend(page)
-        if len(page) < page_size:
-            break
-        offset += page_size
-
-    cached = sb.table("company_embeddings").select("company_id, description_hash").execute().data
+    companies = fetch_all(sb, "companies", "id, description", "id")
+    cached = fetch_all(sb, "company_embeddings", "company_id, description_hash", "company_id")
     cached_hash_by_id = {row["company_id"]: row["description_hash"] for row in cached}
 
     to_embed = []
@@ -108,23 +123,8 @@ def embed_missing_companies(sb: Client, model: SentenceTransformer) -> None:
 
 
 def embed_missing_bios(sb: Client, model: SentenceTransformer) -> None:
-    contacts = []
-    page_size = 1000
-    offset = 0
-    while True:
-        page = (
-            sb.table("contacts")
-            .select("id, bio")
-            .range(offset, offset + page_size - 1)
-            .execute()
-            .data
-        )
-        contacts.extend(page)
-        if len(page) < page_size:
-            break
-        offset += page_size
-
-    cached = sb.table("contact_bio_embeddings").select("contact_id, bio_hash").execute().data
+    contacts = fetch_all(sb, "contacts", "id, bio", "id")
+    cached = fetch_all(sb, "contact_bio_embeddings", "contact_id, bio_hash", "contact_id")
     cached_hash_by_id = {row["contact_id"]: row["bio_hash"] for row in cached}
 
     to_embed = []

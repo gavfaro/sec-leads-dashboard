@@ -58,6 +58,13 @@ export async function fetchAllCompanyEmbeddings(
     const { data, error } = await sb
       .from("company_embeddings")
       .select("company_id, embedding")
+      // Without a deterministic order, rows can come back in a different
+      // sequence between page requests (especially with concurrent inserts,
+      // e.g. an active scraper run), silently skipping or duplicating rows
+      // across the paginated fetch -- the same class of bug documented at
+      // app/page.tsx's .range() call. company_id is the primary key, so
+      // ordering by it alone is already a stable tiebreaker.
+      .order("company_id")
       .range(offset, offset + PAGE_SIZE - 1);
     if (error) throw new Error(error.message);
     for (const row of data ?? []) {
@@ -85,6 +92,9 @@ export async function fetchAllContactBioEmbeddings(
     const { data, error } = await sb
       .from("contact_bio_embeddings")
       .select("contact_id, embedding")
+      // See fetchAllCompanyEmbeddings above -- same stable-order requirement
+      // for multi-page .range() fetches.
+      .order("contact_id")
       .range(offset, offset + PAGE_SIZE - 1);
     if (error) throw new Error(error.message);
     for (const row of data ?? []) {

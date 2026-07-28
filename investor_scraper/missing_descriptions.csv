@@ -1,0 +1,568 @@
+company_id,name,website,firms
+79906903-50f2-4f6f-ada3-329ac76d6cf8,Blavity,http://blavity.com,GV
+1ee55410-9c6c-4ac1-b9d6-6ede1dd4563c,Spruce Health,http://sprucehealth.com,GV
+08e00d15-d6a6-4529-bb82-442e860abf24,Walker and Company *,http://walkerandcompany.com,GV
+a04d11bc-0338-42da-8d53-8443d1cea87e,Mist Systems *,http://mist.com,GV
+a7c422af-3831-4f58-aede-eb50844f4b08,Flutterwave,https://flutterwave.com,Y Combinator
+c210c6f0-cbbe-4321-98f3-cab46dad443e,SpinLaunch,https://www.spinlaunch.com,GV
+3cf70824-58bd-4b51-bafd-911409d9b475,Vendr,http://www.vendr.com,Y Combinator
+67301c0b-5dd6-4b07-8e47-e9f44c4af25f,nPlan,http://nplan.io,GV
+efce5195-052e-453f-aee6-3a32da440e11,H1,https://www.h1.co/,Y Combinator
+7f938ed3-c87c-4d4e-b3b4-72ba013e8a5f,Astranis,http://www.astranis.com,Y Combinator
+5c9acbc7-700b-4c08-b3df-591182f208fb,Areteia Therapeutics,https://areteiatx.com,GV
+1cdc8f37-e12a-4d23-a421-bedb9ac47453,Rocket Lawyer,http://rocketlawyer.com,GV
+2dde3c26-68ea-4388-8ffd-5084fbd363b7,Percolata,http://percolata.com,GV
+408b40d4-9007-4125-a678-b948d19254d3,Vir Biotechnology *,https://www.vir.bio/,GV
+0f3c48ec-216f-4c5f-b68b-ea9933bb93ea,Poynt *,https://www.poynt.com,GV
+4c52fc4b-007b-4ebd-a399-a5b4acfb8b88,Desmos,http://desmos.com,GV
+370bb33d-7303-4615-bce2-3bb4309991b6,Luvocracy *,http://luvocracy.com,GV
+04bff9e0-afaf-4add-b494-5044661706a7,Mechanical Orchard,https://www.mechanical-orchard.com,GV
+6879631a-5c78-4d85-9863-dc63fb1710cb,Appurify *,http://appurify.com,GV
+fd638594-9c1c-4561-a2ef-6bc812309c95,Jet *,http://jet.com,GV
+46643aa3-a27b-4393-b972-9656601070d3,Machinify *,https://machinify.com,GV
+531ecf90-c730-499b-ac9c-bdace5b1091b,Gecko Robotics,https://www.geckorobotics.com,Y Combinator
+fb3229ce-7dfc-418d-94f3-7d0acf04919b,Substack,https://substack.com,Y Combinator
+dc00fced-9732-4359-8ed2-b969ce5b7368,Frubana,https://www.frubana.com,Y Combinator
+43c6123a-f9d8-4e64-9ac2-ad6770a4955d,Industrial Next,https://www.industrialnext.ai,Y Combinator
+71926e26-b21c-4058-90bf-1bfce22a824a,HappyRobot,https://happyrobot.ai,Y Combinator
+0bb5899f-88ae-4d9c-b396-7b4792f5cb22,HigherMe,http://higherme.com,Y Combinator
+58130811-b387-4fe4-9ab0-6b4197cbea77,Quicknode,https://www.quicknode.com,Y Combinator
+aca75b0c-79c5-4db5-8a41-ec5f6ee5e4c5,Unsloth AI,https://unsloth.ai/,Y Combinator
+ca5c3b14-8105-472b-afbd-fb07a845cdd8,Shef,https://www.shef.com,Y Combinator
+409fbb69-8ff5-4360-9b9f-11e5d6c8d41e,Numeral,https://www.numeral.com/,Y Combinator
+840e20e4-74c8-400c-a96c-f40e21ca3345,GovDash,https://govdash.com/,Y Combinator
+839bb6bd-7b16-4598-85e6-98469be3b768,Vicinitas Therapeutics,https://vicinitastx.com,GV
+4d95c584-bb2f-4a56-a3c0-4a04f5bf2482,Boom,https://boomsupersonic.com/,Y Combinator
+09820f5c-2729-4a00-acfb-5468c209de0a,Tennr,https://www.tennr.com,GV; Y Combinator
+dddfc0dc-3042-4ed1-aebf-7e2dffac0017,Hadrius,https://www.hadrius.com,Y Combinator
+c6e06740-18ce-4dc7-8d4c-484a92fdaa35,Cofactr,https://www.cofactr.com/,Y Combinator
+95979db8-b378-4a27-a143-c98a501cc5fe,Reducto,https://reducto.ai,Y Combinator
+0423aea8-e557-47fd-8a08-fce0fb7c9fb2,Sift,https://www.siftstack.com,GV; Y Combinator
+e080bdce-1644-49be-a6f3-df543f232c01,Sendbird,https://sendbird.com,Y Combinator
+2b5cd2a6-ce78-4342-8eb9-b8d0ebc12e93,Gigs,https://gigs.com,Y Combinator
+9404d571-0254-4f74-b78b-83d4eb7d24f6,Emergent,https://emergent.sh,Y Combinator
+64e581fe-ca6d-4a8e-9224-1dbc13c018a8,Vetcove,https://www.vetcove.com,Y Combinator
+393ccc9f-dbf9-48f6-88fe-bfb7679cede2,Hubble Network,https://hubble.com,Y Combinator
+e53d144a-76c8-49bb-aa5a-0897944e23ce,HockeyStack,https://hockeystack.com,Y Combinator
+d558519d-35d2-4685-bf1e-e71bd59b617c,Papa,https://www.papa.com,Y Combinator
+06650756-32d2-4dea-9df8-982c20711963,Finary.com,https://finary.com/en,Y Combinator
+658c369f-1cd1-4cab-bab4-425f0bac8e30,Retell AI,https://retellai.com,Y Combinator
+3987269e-01f6-4e86-bf37-b707147a3707,OpenSea,https://opensea.io,Y Combinator
+698d2cac-0fe8-46ed-a5ca-504a322d2015,Ditto,http://dittowords.com,Y Combinator
+37838bf9-c7a4-4c34-b332-de50afe20d51,Soraban,https://www.soraban.com,Y Combinator
+91efc3fb-4fb0-405b-b5bb-2de4a5131806,Virtualmin,http://virtualmin.com,Y Combinator
+e0736daa-0f87-4b72-8f07-96938b5ce600,Upthere *,http://upthere.com,GV
+56247ef7-e1d6-48c6-b3a9-f6f178b092cc,Harness,http://harness.io,GV
+6dd1aa7d-fc4a-4d78-aeee-44120287ac74,Security​Scorecard,http://securityscorecard.com,GV
+512b0306-2620-4a2c-9588-e9451f9c6166,Clutter,http://clutter.com,GV
+22fe22af-ab86-4d68-b020-9be1078268c6,Affinia Therapeutics,http://affiniatx.com,GV
+2afb13fa-7f29-4349-9fee-a4c16f775061,Blue Bottle Coffee *,https://www.bluebottlecoffee.com,GV
+3694114b-c30c-4877-bd60-7cb78a83e002,AtoB,https://atob.com/,Y Combinator
+964a6654-b614-4c57-a477-5ac35ac377d6,Lively,https://livelyme.com,Y Combinator
+63758f95-4e5b-4e86-a371-b22b7546de59,Zinite,http://zinite.com,Y Combinator
+5de14e65-cd5c-499f-aba6-78d7c3087221,Resend,https://resend.com,Y Combinator
+cd116fa2-9fed-4135-b3a4-eefc92b7d701,Solugen,https://solugen.com/,Y Combinator
+42ef4b9f-7e1e-45fb-88d1-e8f7c47b01d6,Jasper.ai,https://jasper.ai,Y Combinator
+95a8a2a2-2fda-4089-93cb-a9cfd25e3baf,Firecrawl,https://www.firecrawl.dev,Y Combinator
+30b14ec2-fc53-4b77-9234-1ad5e1e4de0d,Titan,http://www.titan.com,Y Combinator
+34f57768-df8f-44e0-b97f-91fda182e227,Canary Technologies,https://www.canarytechnologies.com,Y Combinator
+55960ee5-4347-4a20-a0b1-9717e10f4740,David AI,https://www.withdavid.ai/,Y Combinator
+b1c31a06-e877-44eb-a147-4baaa76b1e03,Diode Computers,https://diode.computer,Y Combinator
+e66fed1f-95b0-432a-bad7-4b01b6e31912,Prometheus,http://www.prometheusfuels.com,Y Combinator
+fabcacc4-f3bc-4d88-9513-e406ce5f1e72,Exa,https://exa.ai,Y Combinator
+0ad3e068-833c-43f9-bb95-100581e234a7,99minutos,https://99minutos.com,Y Combinator
+2b63e278-5b36-4f8c-833b-c745201910f2,Waterplan,http://waterplan.com,Y Combinator
+857b027e-65a6-4a03-9f18-a9122c58cf4b,Ubicloud,https://www.ubicloud.com,Y Combinator
+b5b18822-b451-4e03-8889-7c572e35c992,Infisical,https://infisical.com,Y Combinator
+a6ee770d-67c0-4fdc-9cac-979a233571f7,Nectar,https://nectarclimate.com,Y Combinator
+f5afc4c2-af27-43b5-982b-a7cc42a2ef99,Apptentive *,http://apptentive.com,GV
+5ebe923f-ee9a-4181-a224-e45afc4cf1aa,Stepful,https://www.stepful.com,Y Combinator
+c8b7fcfd-055d-43f6-b37d-f2a66b17c86b,Automat,https://www.runautomat.com/,Y Combinator
+4a680876-1273-49a2-aec0-702ef5f45273,Ajaib,https://www.ajaib.co.id/,Y Combinator
+f311e615-a0a4-4fe9-ba68-c379bd924c43,Encord,https://encord.com,Y Combinator
+7e2c76b8-0182-44b6-b65a-2f334c2740bb,Oneleet,https://www.oneleet.com/?utm_source=yc&utm_medium=bookface,Y Combinator
+e5183cfb-a16a-4077-bb5f-d7f6b3fe71b9,treble.ai,https://treble.ai,Y Combinator
+16ed71c1-fa32-4f6f-b006-fbf806727cf2,Zip,https://ziphq.com/,Y Combinator
+d4284db1-2a38-4fc4-80a9-2a1f2b858d60,Proof Trading,https://prooftrading.com,Y Combinator
+771ceb4a-da5a-4c5f-aed5-f65775b79d50,Nextdoor *,http://nextdoor.com,GV
+becb8ee7-8699-454f-835d-7666e1270485,Vitara Biomedical,https://vitara.com,GV
+25fce321-6bdf-419d-9398-43d66c61f84f,Alethea,https://alethea.com/,GV
+e167d5b0-a628-4f78-8a98-d4c88897dc72,NoRedInk,http://noredink.com,GV
+57ddf5cd-166f-4846-a403-c5fd0a2e305e,Salient,https://www.trysalient.com,Y Combinator
+8c9d7db3-3c93-49db-88d4-ef8db9b32a02,GrowthBook,https://www.growthbook.io,Y Combinator
+e0f6b5eb-4b93-464d-885f-13249dc4ecff,TigerEye,http://tigereye.com/,Y Combinator
+c5c82c3d-3632-49ae-b4a2-5f7de9916535,Hatchet,https://hatchet.run,Y Combinator
+88f96a80-9b30-421a-b97f-221c91523000,Snorkel AI,http://snorkel.ai,GV
+97bf6af9-c0c4-4407-8722-b222b682ad84,Neo.Tax,http://neo.tax,GV
+69db0b48-f51f-4787-a308-295d070df5ea,Yuga Labs,http://yuga.com,GV
+d7ef5e89-77b2-48af-b916-31a9f445df9e,Q.ai *,https://www.q.ai,GV
+1be23d2f-fd38-44cb-b95f-ba6dec383c18,Pager,https://www.pager.xyz/,GV
+5463315b-fa0f-4926-bda5-7768303571f2,Continua,https://www.continua.ai,GV
+f65a70a2-829c-4d79-bd99-42e3205362ee,Powder,https://www.powderfi.com/,Y Combinator
+7ba48917-c39d-4f03-a2bb-b2ce744490eb,Crustdata,https://crustdata.com,Y Combinator
+ea9896fd-119f-4f0b-9e22-fc55e84fbfd8,Blue Frog Gaming,http://bluefroggaming.com,Y Combinator
+a44749f5-1182-4ea6-bebc-71f2243be75a,Spur,https://www.spurtest.com/,Y Combinator
+6d012357-a6d3-431e-9cad-a7ee7813372c,Ember,https://www.embercopilot.ai,Y Combinator
+ab945f76-52e8-46d3-b435-5a138c871cff,firsthand,https://www.firsthandcares.com/,GV
+d885eab4-34ba-4e54-97b2-5113351d3f6d,DNAnexus,http://dnanexus.com,GV
+66aa1a94-7eb8-4134-bbcc-a0abe3330396,Omni Analytics,exploreomni.com,GV
+1a8813d7-55ad-4df5-8e6f-91a2533b5ee3,About.me *,http://about.me,GV
+7d8dcc46-5dc8-40a1-aa61-0bcf5fc36af7,Parahelp,https://parahelp.com/,Y Combinator
+c4a3ba6f-f94d-439a-9ca2-5c5416caff03,Chaldal,http://chaldal.com,Y Combinator
+04586f8a-513a-4bc7-b669-001792f5f380,Pulse,https://www.runpulse.com/,Y Combinator
+f91462ce-b166-4b7b-9045-9463ae6e2c3a,Kastle,https://kastle.ai/,Y Combinator
+6896d24c-a582-49e0-912b-d897e675815e,Oway,https://www.shipoway.com,Y Combinator
+360b79c3-46e3-4828-b737-72584b5c9304,Arva AI,https://www.arva.ai,Y Combinator
+9a4fec12-d71c-4e23-ab04-2ca7db53a086,Pelage Pharmaceuticals,https://pelagepharma.com,GV
+6dc15aa0-4710-41d5-be97-cbf2219de7fd,ROME Therapeutics,http://rometx.com,GV
+52215b94-0b2f-44cb-a3d9-16085090f93d,Again,https://again.bio,GV
+d76ce05c-b6ea-45e0-9ca4-a87e8339b39f,Arcus Biosciences *,http://arcusbio.com,GV
+0266a255-e1f7-4486-bea7-315219c09d62,Collective Health,http://collectivehealth.com,GV
+02193589-683b-4ce4-8a88-a5919dfd2653,Tracelytics *,http://www.tracelytics.com,GV
+0092de20-d199-45ec-937f-3718a86d1ebf,Doctor On Demand,http://doctorondemand.com,GV
+ec5e81f6-8b89-4bcd-996f-a1238990590c,Merida Biosciences,https://meridabio.com,GV
+3540762e-f807-4e20-a9f0-5ff1c8f7fcbd,Midi Health,https://www.joinmidi.com,GV
+73c60d7c-3aba-4a00-81f6-ddfff7078ec2,Attio,https://attio.com,GV
+4418de13-5e7f-4c77-98b8-820827e789d7,Thinking Machines Lab,https://thinkingmachines.ai,GV
+241145bf-9c59-43e7-8ad9-a65a9fa28bfe,Jetify,https://www.jetify.com,GV
+da3a8d64-afc4-483a-8604-1611e40166da,Caraway Health *,https://www.summerhealth.com,GV
+28e39c43-bd2a-40a8-a84a-53f58679b272,Quartet *,http://quartethealth.com,GV
+f4233142-15e2-4b8f-b81e-4ae68e6a6bc6,Nanit,http://nanit.com,GV
+ef6b9b09-22c7-4490-ab27-fde7c4db6320,TravelJoy,http://traveljoy.com,GV
+ef0032f2-04e4-49ca-bb6b-15613dff023e,BlackThorn Therapeutics *,https://neumoratx.com,GV
+60885495-b7cb-4391-b83b-716b2a775b65,Happiest Baby,http://happiestbaby.com,GV
+bd85b5d1-e4e8-4dcc-80d7-55342c4ab67a,Revolution Medicines *,https://www.revmed.com,GV
+4554cf49-5e2d-4362-9fba-e3bd7fe1b962,Isomorphic Labs,https://www.isomorphiclabs.com,GV
+a8b222fa-34a3-4e05-8895-518c5765e3d7,Managed by Q *,http://managedbyq.com,GV
+3deab121-2c31-4e76-93e0-657377377a80,Signpost,http://signpost.com,GV
+d554c1d1-2cc1-43cd-aca0-9a66fd06d852,Phoebe,https://phoebe.ai,GV
+13986d49-5fe1-4a03-938d-7504addb5642,Toast *,https://pos.toasttab.com,GV
+32a29f52-07e7-408d-ad93-448e1e332c71,Devoted Health,https://devoted.com,GV
+7aa00826-ae91-4d52-9592-4e39e66ff933,Voltron Data,http://voltrondata.com,GV
+18996438-5bbb-4707-b4d8-da8e86749fa9,Yieldify *,http://yieldify.com,GV
+8416a40c-f8cc-4f49-9c6f-de2c58b9d2ca,Everest,https://everestagi.com/,Y Combinator
+2c51e2be-b2bb-4c66-864a-6cdde5b29ddd,Imagen,http://imagen.ai,GV
+165b542c-d865-44d6-8f7c-60ef94e9f8ea,Sardine,sardine.ai,GV
+65cd2fbd-c249-4221-8384-9e369fc561eb,oneNav,http://onenav.ai,GV
+29ca7273-fd75-4c26-808b-e9613038267b,Metabiota,http://metabiota.com,GV
+7fdb29f1-4c9f-4d86-abce-f37a861e7eb9,Lightmatter,http://lightmatter.co,GV
+47da57b8-6669-4b0a-a4b0-d50b9f27126c,Copper,http://copper.com,GV
+3bcf4ca8-ea85-4673-99dc-462c3f6f6b00,Bitterroot Bio,https://brbio.com,GV
+cebae95b-4931-45a8-bd1e-637245777be3,TrueLens,http://truelens.com,GV
+7780522d-f321-494d-ab8f-63c2328afe91,Vaccitech *,http://vaccitech.co.uk,GV
+61d16109-3a9a-4927-9cda-96dd009904fe,Santa Ana Bio,https://www.santaanabio.com,GV
+e0204286-7a36-4ac0-9944-e9e58fde7042,Syremis Therapeutics,https://syremis.com,GV
+5c6da09c-88eb-4133-8a19-e35129c83325,Monte Rosa Therapeutics *,http://monterosatx.com,GV
+990c98b6-4535-4853-85cf-cfb113f8e940,English Central,http://englishcentral.com,GV
+922eff76-b264-4989-8e23-6ba2a1c07af9,Verana Health,http://veranahealth.com,GV
+0596df5b-930c-4f04-b0e9-d7dfd50004d9,RhyGaze,https://rhygaze.com/en,GV
+91a0bc89-b013-42aa-8360-b7e16d0a41a0,Pretzel Therapeutics,pretzeltx.com,GV
+658ef76a-ebf0-4a3a-bc32-9eb404867ded,Prudentia Sciences,https://www.prudentiasciences.com,GV
+a0685505-691c-4393-8a7e-b9147911b812,Guidelight Health,https://guidelighthealth.com,GV
+220698a7-c3aa-485b-a2f0-47db817140da,Vungle *,http://vungle.com,GV
+888c8b53-1b46-4a6e-b694-18f52b273a4f,StockX,http://stockx.com,GV
+8d232fd6-2006-40fb-86b2-aac1961d0e52,OnDeck *,http://ondeck.com,GV
+778f30b2-249c-409e-9737-37bf05f802ee,Pensando *,http://pensando.io,GV
+12cf2859-fcc1-4730-b640-711afe15a2ca,Denali Therapeutics *,http://denalitherapeutics.com,GV
+d204288b-ecc6-4f23-a83f-6345044a8c8e,Insitro,http://insitro.com,GV
+9069fe55-49c4-4814-9f40-8a9e0ffbf249,Matter,http://getmatter.app,GV
+620f87e3-e772-4f9c-9534-f803f5485df8,ScoutRFP *,http://scoutrfp.com,GV
+f1fd20a5-e5fb-4a2f-a3e7-6e5adfdaa74c,Metsera *,https://metsera.com,GV
+44abe9a0-47e2-4450-a9e2-3837df8a1593,Synack,http://synack.com,GV
+d49f221f-e4d6-4146-8bdf-a478df9a7045,Upstart *,https://www.upstart.com/,GV
+51ef1745-41ce-4fa5-8b26-ed2b00c4509a,Climate-X,https://www.climate-x.com,GV
+3b7a5815-2122-413c-a322-9bcdbf1a4c14,Pixie Labs *,http://pixielabs.ai,GV
+0c89ab60-d2a1-4fa1-96e7-339666a32480,Wonder Workshop,http://makewonder.com,GV
+8d509ebc-72e7-4afa-8692-973c5c3b5f58,Witness AI,https://witness.ai,GV
+06f117f2-5964-4ba3-8a49-b2f4b6f0bca7,The Players' Tribune *,http://theplayerstribune.com,GV
+be8a8e89-e7b1-4af3-8c61-1802031f891c,Impossible Foods,https://impossiblefoods.com/,GV
+64e5fb62-9139-4f65-b67d-1908fe587a1e,Apptimize *,http://apptimize.com,GV
+d5a1035f-0ab6-467a-8b0f-5546c23e9c6c,TMRW Life Sciences *,https://tmrw.org,GV
+4ee52af5-5720-40b4-9b1e-992659777ef5,Efference,https://efference.ai,Y Combinator
+c2c82345-e251-4cb0-bbf4-1c8b3e3df0a5,Ultromics,http://ultromics.com,GV
+2d95a42e-5d30-47c2-b229-80f73867d35c,Schrödinger *,http://schrodinger.com,GV
+baaa8986-7d87-40e2-92ad-6f27e7109ab1,High Fidelity,http://highfidelity.com,GV
+7e382cb9-b878-4eed-b4b6-b6361409393a,Obsidian Security,http://obsidiansecurity.com,GV
+7ef509b5-9457-4980-bd59-7d64c78119e6,ClassPass,https://www.classpass.com,GV
+c6b535c0-f633-49c7-8268-95d944411c21,Acalvio,http://acalvio.com,GV
+b5f40e75-9437-4301-981b-1aee01be5ddc,StrongDM *,http://strongdm.com,GV
+2641b88f-e43d-4127-b48b-f032188e220b,dbt Labs *,https://getdbt.com,GV
+b6dd9901-20d3-438a-8d0c-71c08841654f,Delve Bio,https://www.delve.bio,GV
+a0303e96-14ee-453d-952a-1da1bedc8c72,Crash Override,https://crashoverride.com,GV
+f1df23dd-63c2-468b-8488-ac7f55c9dc1c,Blue Water Autonomy,https://www.blw.ai,GV
+d253c99c-4440-4f96-9dcb-3bcfd05b43f8,creativeLIVE,http://creativelive.com,GV
+f3212954-6c1b-4dd2-a008-d5d40e9ce6d3,Product Hunt *,http://producthunt.com,GV
+44b6f4e1-2859-4bda-a2a9-88ab7dfc37ce,Roboflow,https://roboflow.com,GV
+afe92684-4cb2-40dd-80b2-404a4ec53fee,CoreOS *,http://coreos.com,GV
+f4b43048-29b5-44d0-bebf-50ba2de0bac3,Verse Enterprises,https://verse.inc,GV
+2dd78772-4e3f-4df0-b51a-c249593226b3,UberSense *,http://ubersense.com,GV
+52f01736-843b-4b02-b703-413e221f1e99,Carrick Therapeutics,http://carricktherapeutics.com,GV
+8f5f6f1e-8dc3-4389-888b-813e3aa1c057,Typeface,https://www.typeface.ai,GV
+841d3b13-a01c-41e8-8af4-2f9742ddf552,Robinhood *,http://robinhood.com,GV
+1178a8ef-689a-4eb2-bee3-d369ecfc5ba9,Sana Biotechnology *,http://sana.com,GV
+af266501-b14b-4b53-93d8-7f010ba8cbce,Modern Age,http://modern-age.com,GV
+5c60c27d-776f-4fbf-9792-018ebb7c1464,MindMeld *,http://mindmeld.com,GV
+ae86a9a6-e7ca-4ac1-9552-41c5a0f1c4bb,Rattle,http://gorattle.com,GV
+05621599-730d-4a3d-a313-48f506e10061,Trace Neuroscience,https://www.traceneuro.com,GV
+c5ae1336-0066-41c6-8281-d63498f7be26,Speakeasy,https://speakeasyapi.dev,GV
+d62e835c-fa64-43d5-9bb1-bdf11beecd44,TScan Therapeutics *,https://www.tscan.com,GV
+c189bfb2-19c8-4673-98f9-aebb83f33a70,Beam Therapeutics *,http://beamtx.com,GV
+ab81dced-0fe1-4c48-8122-37269f1404c9,Udacity *,http://udacity.com,GV
+76324187-d2d7-439f-9a0c-4c0979359590,The Climate Corporation *,http://climate.com,GV
+b165bd38-7c0e-42b6-92d5-ccec6033a656,Lovevery,http://lovevery.com,GV
+763c24b3-90ce-4a70-b5c3-0cc31ea70890,Aspen Neuroscience,aspenneuroscience.com,GV
+e75e326a-5d4a-4f43-b7bf-bb113165f2e1,Ideaya Biosciences,http://ideayabio.com,GV
+06948599-473c-4ca0-a231-c06e73b63116,Bounti,https://www.bounti.ai,GV
+bf88e5ae-7610-4941-a3bd-405b12219620,IonQ *,http://ionq.co,GV
+7b554e6e-64b3-4310-b367-7525ae14e97c,MessageMe *,http://messageme.com,GV
+64d91006-7561-4bca-9dc6-f0b5eb743a4a,PACT Pharma,http://pactpharma.com,GV
+3eb9a502-ac47-4101-9a95-3b8a3682c571,VIDA *,http://shopvida.com,GV
+6b112a08-2310-4bf0-baf5-60c1212224b4,99 Counties,http://99counties.com,GV
+2838f9ec-4f44-4eb0-8cce-9cd5eba06e6b,UJET,http://ujet.co,GV
+000aa052-6222-4231-8d5f-1be21729e816,Wonderbly *,http://wonderbly.com,GV
+f29b78ee-7f78-4e1e-9371-ad653e6206ca,ZappRx *,http://zapprx.com,GV
+a393acb2-f7e4-400f-924d-c0a7bc268f79,Delphia Therapeutics,https://www.delphiatx.com,GV
+0f244370-19a3-47b9-9b3b-ecc7832de750,Infinitus,http://infinitus.ai,GV
+06ed9cd4-74c5-4d2f-8ee5-4e0b2b1a62e4,Hustle,http://hustle.com,GV
+ddfadf89-a3d2-4c56-8431-d316c47accbd,Rockbot,http://rockbot.com,GV
+3c8b805e-b16b-4b13-b67d-417ebe14df33,Digit,http://digit.co,GV
+1d717c8f-d41c-4b3d-af69-698ed3e90f56,Yesware *,http://yesware.com,GV
+2db2202d-3406-4b63-976b-b2a2b6388a57,Yieldmo,http://yieldmo.com,GV
+35db3ff4-a27a-4bd2-b4ef-0d563d4621b9,Viz.ai,http://viz.ai,GV
+fad6e404-a9a1-472c-991d-a4c79d3c6e19,OMass Therapeutics,http://omass.com,GV
+a413eecd-c126-4d60-94fd-fad870b855b3,PostHog,http://posthog.com,GV; Y Combinator
+7845d1dc-72a6-41e5-8ef9-0a7112207147,Comanche Biopharma,https://comanchebiopharma.com,GV
+dcbcfe97-b1d9-4a81-9ba6-04f8a72a22fd,Parabilis Medicines *,https://parabilismed.com,GV
+73dad007-6714-4336-9dbb-0a513ed9a7d1,Abacus *,http://abacus.com,GV
+3b4da68d-d9da-445d-a516-8a6a6b8a2b95,Waltz Health *,http://waltzhealth.com,GV
+92a3a12a-f707-4981-93b6-b0e6d0568a42,Kabam *,http://kabam.com,GV
+0f716971-34d7-4dcb-954f-ac04f319a4bd,Dialpad,http://dialpad.com,GV
+0d9e44ea-7f67-40c5-9847-740122f3f859,Mill,https://www.mill.com,GV
+0635c0a4-ae40-42ef-bd82-bddec949175a,myLaurel,https://www.mylaurelhealth.com,GV
+b2cdf052-f27c-495f-90cc-ba8e8ab19977,LawPivot *,http://lawpivot.com,GV
+9f40d52c-2afa-4df5-954b-c5051654a39b,LedgerX *,http://ledgerx.com,GV
+fc33d7a6-4175-4fe9-8ea9-b058fc6b9c0f,Gate Bioscience,https://www.gatebio.com,GV
+83f646e8-bd8c-424b-a0b1-7ebb10ee3bf5,Confide *,http://www.getconfide.com,GV
+f7a13090-f713-49b8-8103-6298b737b608,Aledade,https://aledade.com,GV
+8d479eae-47ea-45d6-8b39-a22b0d5fe8a4,Watch Club,https://watchclubtv.com,GV
+7b2146c3-0084-4f26-b4a8-d986146e8153,Firefly,http://fireflyon.com,GV
+066aea00-a247-40a8-9c1c-f808fc29249d,DocuSign *,http://docusign.com,GV
+9ce0be9d-da2b-40be-9725-d622cb73f3d8,Wingu *,http://wingu.com,GV
+d53205a5-32f5-4f93-9825-b70d3a11e4ef,Accent Therapeutics,http://accenttx.com,GV
+9489dc23-9d24-4626-b9e6-7ce03e9e2d3a,Segment *,http://segment.io,GV
+fc8f2ba6-45cf-4aeb-88cc-c1ccc7ba1111,TuneIn,http://tunein.com,GV
+43039a95-e557-4819-a6ed-43b6d7ce053f,Framed *,http://framed.io,GV
+bc37e8b1-ba4d-489c-9a55-cfde318a86bd,Buena,https://buena.com,GV
+e8cbc349-6f80-4cc7-9076-78faec6f42b8,Flock Freight,http://flockfreight.com,GV
+949586b4-bed0-451a-ad17-16a03fe28dad,Blacksmith,https://www.blacksmith.sh/,GV
+c629eda3-0c1a-4b82-a292-ac2298ae41d6,HomeLight,http://homelight.com,GV
+3651413a-4a1e-4b64-b935-749a9977947c,Evelo Biosciences *,http://evelobio.com,GV
+34d8c3ec-cd20-4054-bee6-9f90b486543a,URX *,http://urx.com,GV
+ee3ce64f-8e62-49a4-9e26-aa42629178a7,Lapse,http://lapse.app,GV
+48529f48-6192-44b5-ba40-3ae377ab944e,AngelList,http://angel.co,GV
+403f5b65-de48-4b31-b66d-83e4b612fd2e,Rani Therapeutics *,http://ranitherapeutics.com,GV
+1f307737-f80b-4e59-b7f2-9de7e06238cc,Synapticure,http://synapticure.com,GV
+390e116e-5c75-4815-b7df-aa902e6df00c,Anomali,http://anomali.com,GV
+0b47d64a-e964-46d3-aa29-bf23e12dd4c6,Uber *,http://uber.com,GV
+e3da18bd-d303-4cc2-8706-68535560bccf,Openbay,https://app.openbay.com/,GV
+f3fee9b0-b0d8-4a6c-a666-68e20de99304,Determined AI *,https://developer.hpe.com/platform/determined-ai/home/,GV
+1c1f5409-5458-415c-8207-42d4e5126ee8,Vocode,https://www.vocode.dev,GV
+24b3812f-d045-4553-b24d-70aaa4ac2886,PatientPing *,http://patientping.com,GV
+c82adad7-a6a8-40a0-a1bb-6fcde496f4ed,Cognosys *,https://cohere.com,GV
+03f25934-19b3-4b2c-9737-d78f1f7daeac,Gyft *,http://gyft.com,GV
+bfd4ba49-ff61-4cfe-82d6-1e5f02f93a8d,Encoded Therapeutics,http://encoded.com,GV
+6b565c6b-ed74-43f7-8a01-576a6c7dfc14,Collaborate *,http://collaborate.com,GV
+863e0e54-a184-4ab1-8efd-f8d512d647f6,Diverge Health,https://divergecares.com,GV
+fb7495f1-bc01-42df-a7cc-398f9a0ac11a,Nothing,https://www.nothing.tech,GV
+e0a7668e-9b4c-4bb1-8517-dece705b8a95,Highfive,http://highfive.com,GV
+d92f4d4d-1ecd-4e8a-90fd-454bf18b213e,Kronos Bio *,http://kronosbio.com,GV
+cf0ec48c-0c27-4fcc-866c-d82ccbb497d0,Nimble,https://www.nimble.com/,GV
+e9bc1b50-4173-4e4f-93e0-77b09b310c7d,CyberGRX,http://cybergrx.com,GV
+5d2c74e5-b307-4161-b193-0ec122fb8e28,Kobalt,https://kobaltmusic.com,GV
+571d9d4f-c6a2-48aa-ad81-72aa790b06f4,dope.security,https://dope.security,GV
+c6ffedad-df92-40a5-8288-349b561638ea,Optiwatt,getoptiwatt.com,GV
+1761d238-695d-457d-b3e7-2e93bee3c0ce,Pangea,https://pangea.cloud,GV
+865c39c9-4310-42a6-9dce-4713696426c5,Benson Hill *,http://bensonhill.com,GV
+fc362fb6-0bfa-4567-a125-28327b918f3a,Turo,http://turo.com,GV
+088d96c8-f970-4cc0-ae8d-36d4876d6c70,Cool Planet,https://www.coolplanet.io,GV
+cc047026-2878-4de6-9d72-d1f6d6385a2d,Genie AI,https://www.genieai.co,GV
+25bec436-cd58-4b51-89f2-9aaa83e59122,MindSumo,http://mindsumo.com,GV
+6ec0084b-9fd3-4a6d-99d5-10e3f964eac4,Plexxi *,http://plexxi.com,GV
+37caecd9-b78b-436e-ad18-21910d8940aa,SQZ Biotech,http://sqzbiotech.com,GV
+dd2b4269-4538-4821-88f1-1a3bfcdc8d92,LendUp,http://lendup.com,GV
+7ec6eb8e-2145-426a-93e6-87f2a419dff1,Autolus *,http://autolus.com,GV
+c56df537-346e-4ddc-9052-59242c62d1f4,Censys,http://censys.io,GV
+ee984847-f77b-475c-84e9-d25df79b79f8,Deepset,http://deepset.ai,GV
+f310bab8-241d-4137-bea5-86736864b011,Forty Seven *,http://fortyseveninc.com,GV
+2ffea429-bd59-4df5-8ebc-cdf6c840ec7a,Aera Therapeutics,https://aeratx.com,GV
+14ff0e0a-b52c-4d9c-a04c-1f8c65215b35,Nimbus Therapeutics,https://nimbustx.com,GV
+951f0aa9-5158-48a9-933f-9f01e4c7ec3e,SingleStore,http://singlestore.com,GV
+b86f51d5-ba85-40b1-a76c-986940e80b0b,mabl,http://mabl.com,GV
+3df64f54-715b-4846-932e-2efea5a2628a,Evox Therapeutics,http://evoxtherapeutics.com,GV
+55995314-7eb5-4ae1-bf6b-86eea4180630,Buoyant,http://buoyant.io,GV
+316f44a6-ef16-4b18-9f7a-d1cf21b9ba3c,TheSkimm *,http://theskimm.com,GV
+695c6eac-9770-463d-92d6-dd36c482179c,Signos,http://signos.com,GV
+c564c274-bbca-4b41-8e3a-e0d41d4dcf06,Datanyze *,https://www.datanyze.com/,GV
+ae7302ba-f3ca-4b92-925b-da01b47a70a7,FullStory,http://fullstory.com,GV
+c039c291-686c-4fa8-a222-363002a5cb2c,Spruce Finance *,https://sprucepower.com,GV
+ee9e749e-6109-4eda-964b-35f5520ad935,Lola,http://lola.com,GV
+953d2a4f-bfa8-4efb-ac50-836c701819c6,Upbound,http://upbound.io,GV
+6b0fe77c-c530-4591-8eff-fa7ea1486afb,Divide *,http://divide.com,GV
+e41ea483-7fea-4262-9ca9-20bc376aa188,LaunchKit *,http://launchkit.io,GV
+4ef3f700-ac8d-410c-8b5b-19f7a0a8eae5,Giphy *,http://giphy.com,GV
+6580593e-10d6-4d71-9e9f-e244d3351082,Clover Health *,http://cloverhealth.com,GV
+849f51d3-7bee-4bf9-84ff-ed746025b455,Outdoor Voices,http://outdoorvoices.com,GV
+f782d851-3642-40da-936b-ca501db27f50,Incorta,http://incorta.com,GV
+6b69741e-b2c5-4e0a-ab67-d2c788f3c5f9,StackOne,https://www.stackone.com,GV
+8d234889-0e0e-4ca0-883c-75411ec54c37,Context.ai *,https://context.ai,GV
+9c8381a5-d59e-4eee-8cf9-a2304cedfa11,CircleUp,http://circleup.com,GV
+64a4a131-978b-462f-9dc2-bb2fc1c4a1be,Antiva Biosciences,http://antivabio.com,GV
+5abcafbd-be04-4a7a-a9be-c54871e66396,Fathom,http://fathomhealth.co,GV
+35b88067-8456-4992-a98d-c243667dfea0,Tala,http://tala.co,GV
+3b675fdb-18d1-4558-a62c-f1dcc228c8cc,Opendoor *,http://opendoor.com,GV
+9fc4b62d-46e0-435b-a984-c26ffbb4d65e,PayRange *,http://payrange.com,GV
+39d21ef1-65a0-4e97-bd51-0aa4fef3abd2,Xilis,http://xilis.com,GV
+b67aae48-b023-4a7a-b914-8b946059b29a,Desktop Metal *,http://desktopmetal.com,GV
+42cb4e9b-4cd2-4a48-9a16-261e6e27f71a,Neo4j,http://neo4j.com,GV
+24976a23-b05e-4b93-a88b-5bb97e807a81,Comfy *,http://comfyapp.com,GV
+0a6dfdf5-7b09-43c1-8dc9-b1346e009d66,EpiBiologics,https://www.epibiologics.com,GV
+f7c8f91b-c695-4534-8f43-aa1126d5a204,HelloSign *,http://hellosign.com,GV
+a1639e55-ac83-4c82-915e-17172d29018c,MokN,https://mokn.io,GV
+472dcbd9-b6b5-4e31-a7be-c1bbba74082b,Kindred *,http://kindred.ai,GV
+600e620c-5865-40b3-a994-4527c19a3603,Nebex,https://www.nebex.com,GV
+22f126b6-9b6a-41ae-abd7-e61c0b872161,SolveAI,https://solve.ai,GV
+da833278-8d79-4b2e-8796-78450a892438,Lemonade *,http://lemonade.com,GV
+3ac23d7d-cada-417a-bacf-05d52cb69c59,Stipple Bio,https://stipple.bio,GV
+f58cdf75-9016-487a-b02d-6e292bf4420a,Oblenio Bio,https://www.obleniobio.com,GV
+ed67f045-0ec5-4f95-ac9b-a3341880584d,Quadratic,https://www.quadratichq.com,GV
+7fee58e4-75d0-499e-bcb9-aa8d090325bb,Magenta Therapeutics *,http://magentatx.com,GV
+cd38196f-d553-45c3-ace8-5fadda3070d3,Clarifai *,http://clarifai.com,GV
+c35d85b5-3f8a-4452-a9c5-7f1ee8cb8044,Delighted *,http://delighted.com,GV
+03714a3d-3d9b-40a3-b050-98a564683369,Flatiron Health *,http://flatiron.com,GV
+69294ff6-3856-4a21-a22e-f69a6789c0f8,Inertia,https://inertia.com,GV
+ba40d723-834e-4b43-b399-8ae930253975,Lime *,https://www.li.me,GV
+a8990211-231f-4be2-be84-520bd5a78485,Duo Security *,http://duo.com,GV
+6f7d25d2-74fd-4ce3-81b1-788a5ddcbee9,Maze Therapeutics *,mazetx.com,GV
+ba191209-46df-4418-8d0f-18695216e9d3,Puppet Labs *,http://puppetlabs.com,GV
+27f4cf58-e867-4b27-ab42-9eccfc2d9676,Universe,https://univer.se,GV
+d2b56c65-c8f5-4882-a9a2-4be1499bb386,Modsy *,https://www.modsy.com/,GV
+13b3161d-3bc7-4796-8829-b4f86b4bb6c1,Editas Medicine *,http://editasmedicine.com,GV
+664eee2f-b5c0-4248-8cc2-d3f7bf53d47a,LevelUp,http://thelevelup.com,GV
+fcbe7969-f966-435b-a7c8-753e537809f7,BBOT,https://bbotx.com,GV
+20c84562-3fb6-40bd-825d-4d640ee7d783,Andela,http://andela.com,GV
+83dedfc1-713d-4967-93b0-31d5f0d23cc9,Egnyte *,https://www.egnyte.com,GV
+a1edf104-848c-42f2-ae4b-b7b364a35c00,Agtonomy,http://agtonomy.com,GV
+f27e18e6-9ac7-4404-8406-8e3e3ab90839,One Medical *,http://onemedical.com,GV
+a9993be0-3de7-41dd-9187-da6c41bac86c,Ethos *,https://www.ethoslife.com,GV
+a81ce359-a34b-44eb-9da6-93d228bf979d,Voltage,http://voltage.cloud,GV
+462864b4-7721-4133-8c77-167f770d7845,Home From College,https://www.homefromcollege.com,GV
+bf0c963b-423c-431e-ace5-ef23cb54ac51,Peerspace,http://peerspace.com,GV
+92a0c282-0402-47dd-b9db-c9eafa16201e,Basis,https://www.getbasis.ai,GV
+3368c3c6-2ebc-4f1a-802b-4b203d7ec44c,PeopleOne Health,peopleonehealth.com,GV
+b14c55f0-2b9c-45b2-85d4-8bf2e0d660d9,Reaction Commerce *,http://reactioncommerce.com,GV
+e82a5fde-a73e-4fd8-be6f-3e85a479a28e,Resolution Games,http://resolutiongames.com,GV
+0c59f47c-d41c-4133-90db-4204a38cf476,Bugsnag *,http://bugsnag.com,GV
+9f386363-f296-4d36-9f53-241e153b2386,Adapter,https://www.adapter.com,GV
+ecef2175-7941-4b1b-abc6-15c92e5cf6f3,Hyperfine Research,https://www.hyperfinemri.com,GV
+bc5f6520-eb97-4bcb-bdb0-7048b7c4da0e,Kinetic Apps,http://www.kineticapps.ai,GV
+5fbe4ba4-0531-4a2f-86cd-bc31a6e964d5,ThousandEyes *,http://thousandeyes.com,GV
+c1927050-8672-41f9-a2e5-eedce657eecd,Aspire Health *,http://aspirehealthcare.com,GV
+c9a8f2c0-ae4e-4c97-977c-14e487650273,Secret Escapes,http://secretescapes.com,GV
+199d5493-8e38-44be-a905-45956afd85ec,Sensorum Health,https://www.sensorum.ai,GV
+2260891a-610d-4449-bbd8-51a76d4f87b2,Checkmate,https://joincheckmate.com,GV
+25da0dbe-386f-4a78-b610-d994e5732251,Rilla,Rilla.com,GV
+f85f5c28-8248-4b79-98fd-9dd4e60eec18,Corduro,https://www.corduro.com,GV
+0ffef827-2677-4cd5-93da-19639bab4080,Science 37 *,http://science37.com,GV
+71f24707-efa3-4f82-aeff-f316737c6ce6,Farmers Business Network,http://farmersbusinessnetwork.com,GV
+549c2b80-0b06-4f31-8490-5fe8ba997748,Digits,http://digits.com,GV
+23a5e077-24b9-4f84-9c7e-3045253f72b1,RetailMeNot *,http://retailmenot.com,GV
+de6a8111-65a8-4d7e-aa2a-f46816ca7e72,Nectar Social,https://www.nectarsocial.com,GV
+a7600ab6-fd00-466f-a8bb-2f1aae9d6192,Vareto,http://vareto.com,GV
+104f2789-4ea8-4732-8754-ab3f615329f2,Smol,http://smolproducts.com,GV
+714eb6d6-5b9f-45f4-b3fc-feaca2020c5a,Veza *,http://veza.com,GV
+a2e02db6-3e24-470f-be3c-86acabe5575d,Dandelion Energy,http://dandelionenergy.com,GV
+035c6970-a52f-430e-b396-915f439d2099,Arrakis,http://arrakistx.com,GV
+a8e8a4e8-e820-4a31-a4f5-46d82083ea17,Sonoma Biotherapeutics,http://sonomabio.com,GV
+61274f78-fbe2-43d1-b9c5-3b045e642338,Homebound,http://homebound.com,GV
+8dbfedee-192c-4127-9c07-e4ce725fe8c7,PlanGrid *,http://plangrid.com,GV
+56afc878-b0a1-4275-9f6a-244b6c312394,Cymbal,https://cymbal.xyz,GV
+30af1877-b09c-4697-b657-ab2fdb590beb,Perceive Bio,https://perceivebio.com,GV
+83e13af3-ad8f-4c39-ad31-c7611bf87018,Unbabel,http://unbabel.com,GV
+a50a471a-68bb-4f1d-ba72-fa991f942786,Curie.Bio,https://curie.bio/,GV
+3cafcd2e-d4a8-4181-ac7b-0bd3c1c28441,Vera Therapeutics,http://veratx.com,GV
+cd6c0678-cbcb-4f98-9bbe-9805108585ce,Luxe *,http://luxevalet.com,GV
+b4498ff7-aa8f-463c-9766-e4607cfddf8e,Taysha Gene Therapies *,http://tayshagtx.com,GV
+9cb66977-c35f-4e13-923b-900ddd018b39,Intercom,http://intercom.com,GV
+ad21ac6b-b649-4827-bb9b-c38b576c0aad,Guild.ai,https://www.guild.ai,GV
+b62ff2c6-cf10-4a31-9fd8-bfffcbb92a44,HeadSpin,http://headspin.io,GV
+d430b307-8200-44be-8c50-5c2fa16e289b,Layer Health,https://www.layerhealth.com,GV
+6258fead-2322-4395-822d-51bc68493bcc,Savioke,http://savioke.com,GV
+ec002cd0-aad6-4733-9124-7f35dfac9bfd,HOVER,http://hover.to,GV
+1781499d-7d39-4082-b934-76bdadb2347d,Lawhive,https://lawhive.co.uk,GV
+d4055324-1e46-4a63-b533-29a173ba6bed,Skyport Systems *,http://skyportsystems.net,GV
+4490ed45-516e-4df7-bf6e-9256b3629194,Wealth.com,https://www.wealth.com,GV
+222b51fa-8ac8-434e-966f-4a2d2a421a65,Rippl Care *,ripplcare.com,GV
+ed0c57eb-08e1-40d5-a400-e35bfed0ca8e,Scandit,http://scandit.com,GV
+86c36c0a-d112-4ac1-b5f1-c78fcc94bae5,Endurosat,https://www.endurosat.com,GV
+109d948e-97d9-4409-94ab-2fa451d0065c,Roger,https://www.goroger.com,GV
+65e29653-a6d2-44e0-8510-d2b787a3afa0,Mother Games,https://www.mothergames.com,GV
+0a32b798-2632-4304-b656-c6c1ed3cdc65,Push Security,https://pushsecurity.com,GV
+d8b2839e-efe2-45dc-b46c-ef33504b898a,Scalyr *,http://scalyr.com,GV
+a09cc651-8aa3-4a72-b325-1fbb4f0833a7,Cameo,https://www.cameo.com,GV
+3718b7cc-de33-41ee-80c5-3a2eeb3d89c9,VigLink *,http://viglink.com,GV
+9f9dee71-6adc-4c79-9b81-dcf1ea9dcac9,Veo Robotics *,https://veobot.com,GV
+95d79967-75ba-4012-8918-ae5a733b8c37,EveryONE Medicines,https://www.everyonemedicines.com,GV
+599f28fb-a705-489a-b502-9a49f27b60d8,N3twork,http://n3twork.com,GV
+c897b8be-9751-4360-aedc-011e19c5e543,Clever *,http://clever.com,GV
+dc7fd675-7e65-4f80-a98d-6daa5bb927f7,Moonwalk Biosciences,https://moonwalk.bio,GV
+aad7789a-0d21-4f7c-99cf-00fe0bb69c81,Gravity,https://gravitymobility.com,GV
+924e39d2-d611-404e-b9ec-f83507c43f8e,Element Science,https://elementscience.com,GV
+cb4225da-59ab-403d-9455-e621686bff03,Spero Therapeutics *,http://sperotherapeutics.com,GV
+2e3f706b-b02e-4e92-8861-384e2d9eb044,Pecan AI,http://pecan.ai,GV
+62f16688-2628-4367-8533-898f4a8f5bd2,Rocketrip *,http://rocketrip.com,GV
+1fb1f504-55c7-49ad-8eb8-2a0fe4633a2c,Polar Signals,http://polarsignals.com,GV
+e8330800-da4e-411a-8ef9-b100f82a1800,Wander *,http://onwander.com,GV
+5011d243-b831-419e-a431-d7b7f29a88a7,Subtext *,http://subtext.com,GV
+399fc88e-1034-4896-b163-ee9b64e39500,nChroma Bio,https://www.nchromabio.com,GV
+32642b8a-084f-434a-b7f6-3e8e188bbec8,Courier,courier.com,GV
+7916f4af-92c6-4ddc-8763-3a34932073e0,RightHand Robotics,http://righthandrobotics.com,GV
+a984da53-834e-4ce1-9b63-df5a9ab06bad,Glass Imaging,https://www.glass-imaging.com,GV
+68e142a6-cc56-4135-8a59-1002b78caef5,Grail,http://grail.com,GV
+b4a082cd-af97-4b9d-aa0e-1d3d4fda5338,Mestag Therapeutics,http://mestagtx.com,GV
+18b41e7c-9d9f-481e-beec-7724afce65db,Ripcord,https://www.ripcord.com,GV
+2dbd0580-91fa-4b83-8817-7f95d7dd8045,Strella Biotechnology,strellabiotech.com,GV
+88a373bb-8dcb-4dfe-8b74-0cb422c50147,Scope3,https://scope3.com,GV
+695adc4c-e4ec-4fc3-b53f-41e817d41641,Counsel Health,https://www.counselhealth.com,GV
+3bb60f2c-7926-4300-b7fd-a370814b5971,Voicea *,http://voicea.com,GV
+b3b1807e-550b-4930-85df-2c88b8c5d973,Bloom Institute of Technology,http://bloomtech.com,GV
+c832e51f-175a-4c82-9b9b-a9df5537bcf9,Translucent AI,https://www.translucent.ai/,GV
+c751d1d2-b6df-4fce-90fd-7e53ab76ec4c,Makani *,http://google.com/makani,GV
+7ef32cc8-3603-4067-be55-13c5e6fb57fd,Career Karma,http://careerkarma.com,GV
+efd86993-0655-40c9-ad9d-bf1e938f471b,Slack *,http://slack.com,GV
+b393af58-8b76-41c6-8c98-34156a6bb93d,Groundswell,http://groundswell.io,GV
+92517ead-3c45-4089-9e5e-d0f4a8c177d8,Parse *,http://parse.com,GV
+3c92a05d-39c1-481f-bbcc-61314ed1b7b9,StackBlitz,http://stackblitz.com,GV
+dcf80d7e-9912-4588-b947-11f29abf38c1,OWKIN,http://owkin.com,GV
+287c53b1-80f2-41d1-81a4-35879b089439,SideQuest,sidequestvr.com,GV
+57fd89c0-9d5c-4ef4-9d92-7a1208f6c54a,SambaNova Systems,http://sambanovasystems.com,GV
+2ee6b828-b5fa-45a1-9830-0d007791cf15,Urban Machine,https://urbanmachine.build,GV
+f8a2acdf-069d-4e61-baae-ce6964953353,Cur8,https://cur8.earth,GV
+ba635ea1-aa95-43a0-a9c9-7d5313374d28,Comstruct,https://www.comstruct.com,GV
+1b50221e-d62f-48c8-9a28-48e85458ce3c,Yellowbrick Data,http://yellowbrickdata.com,GV
+9f873ad9-6ff1-4b14-a7b8-1f85ef77a118,Blockchain,https://www.blockchain.com,GV
+fa79e0f1-0fc5-4c31-94a3-9108c6e38225,Premise,https://premise.com,GV
+bec984c3-e877-4fff-aa76-33d7473ab20d,HubSpot *,http://hubspot.com,GV
+b2df34c8-6b13-48c9-8c97-ac423f3fe7f5,Dyno Therapeutics,http://dynotx.com,GV
+1d615c5c-f520-4c2c-a8ba-ddbc06a1d090,Moonhub *,https://moonhub.ai,GV
+966e8f78-ad5a-4d2f-90c3-7dc0523013bb,Ankyra Therapeutics,http://ankyratx.com,GV
+8a0abebe-6658-42e5-969b-e5449ba49dd5,Omeat,https://www.omeat.com,GV
+a3c499d1-fdb1-46b0-803c-d9518cd41543,Cosmos,https://www.cosmos.so,GV
+cf4e403d-e026-4649-b796-946436f498e8,SweetLabs,http://sweetlabs.com,GV
+b4cc5394-7bee-4f35-a976-2e3e6614513c,Oasis Health Partners,https://oasishealth.com,GV
+f9fa3bde-0e12-4ffb-af1c-970ee221e532,CacheFlow *,https://www.getcacheflow.com,GV
+300753bf-95d4-427a-998c-386f5481dd07,Pindrop,http://pindrop.com,GV
+a966f828-4c05-41c3-a06c-ef400531e1e8,Sprinter Health,http://sprinterhealth.com,GV
+f3cab6e5-f5be-4be1-8e42-a53c8f224634,Metaview,https://www.metaview.ai,GV
+5a2cf31e-1dc1-43b6-8286-44ad51d29bcd,Spring *,http://shopspring.com,GV
+78584924-d359-465b-b32c-72c62fe176b5,Odyssey,https://odyssey.systems,GV
+13980063-9ea1-4380-8f50-2c13c325e9fa,Brightline,http://hellobrightline.com,GV
+0af30106-8932-4ad9-84bd-ad751875df6b,Simply,https://www.hellosimply.com,GV
+883c517b-6150-4920-8eeb-79d63c6cace3,Swing Education,http://swingeducation.com,GV
+ecbfc1c0-1c34-42fc-9489-6a40841a79ae,Reserve *,http://reserve.com,GV
+1f6f91c3-0c1e-4a76-901d-6b106b388365,LotusFlare,http://lotusflare.com,GV
+6adfbc1c-04f0-4c0a-ba42-081ec4179172,Cardurion Pharmaceuticals,https://cardurion.com,GV
+0f15d540-c34d-4343-aedd-0b6cb3d924e8,RAPT Therapeutics *,https://rapt.com/,GV
+5e3e4e51-2d4a-465c-b567-da133316d76b,GitLab *,http://about.gitlab.com,GV
+bb36e191-1553-4201-84db-5f39202675ce,Skycatch,http://skycatch.com,GV
+964acf31-eb35-4059-b4ae-7e111760f2f6,Cozy *,https://www.apartments.com/rental-manager,GV
+af0748d2-3c5f-4ce8-9f64-9665f145c2a5,Fyto,fyto.us,GV
+a8a10220-c423-485f-876d-0203c12b45d7,Mirvie,mirvie.com,GV
+32b13b71-b047-47ba-b79f-230cd5e33ad5,Altana AI,http://altana.ai,GV
+af474fc4-e4c9-4679-a9f4-794ace292030,Artifact,https://heyartifact.com,GV
+15192654-ad0d-43c3-9eb2-a7cbbcd3741d,Cloudera *,http://cloudera.com,GV
+21f172a0-8a3a-4188-b477-e945fb2ed5c4,Sanas,sanas.ai,GV
+3010f0c0-9525-4dca-9422-c6033bde6faf,Bonnet,http://joinbonnet.com,GV
+63fa6b08-b361-4bae-88bd-8b4b551ae999,Stamped *,http://stamped.com,GV
+b687e17e-44f0-418d-b828-bf88e1385aaa,Ripple Labs,http://ripplelabs.com,GV
+d85ffc95-749f-4fc9-9089-d5a8b8d87b60,Oscar *,http://hioscar.com,GV
+a15f22be-ce2a-42c7-99df-d4290221f283,LifeMine Therapeutics,http://lifeminetx.com,GV
+3b2698ab-0d7a-4f17-a07f-ae4d3f95935e,mParticle *,http://mparticle.com,GV
+a6049bb3-5664-48ba-a3b8-f0ff5ad1329f,Cord *,http://www.cordproject.co/,GV
+d9dd579c-dd6b-4c1e-ad78-910a4547cdad,Adelphic Mobile *,http://adelphic.com,GV
+12072cf3-024a-4207-8d23-aab7e37a16a1,Dapper Labs,http://dapperlabs.com,GV
+fc3af38f-ace9-4ca1-8c92-f1591fbf21c1,Luna Park,https://lunapark.com,GV
+ca9c8c32-fdcf-44e9-a918-c8635fce0c89,Modular *,https://www.modular.com,GV
+c307d949-49fb-4b4d-a388-516c98579fcc,Decibel Therapeutics *,http://decibeltx.com,GV
+fd2f0675-9fa2-45a8-b729-f53e67a5536b,Tend,http://hellotend.com,GV
+67d2fec2-f180-4daa-a446-ab641b4beb09,Celsius Therapeutics *,https://www.abbvie.com/celsius-therapeutics.html,GV
+76349dbd-7d88-4121-b8ff-54c08acebd57,Ahana *,http://ahana.io,GV
+9d92aef6-3cee-47c6-8bb0-9614e6ae336f,IconOVir Bio,http://iconovir.com,GV
+4b5225fb-70ce-4c78-97c8-b3df6bbd6d16,Kensho *,https://kensho.com/,GV
+07723ef6-0f41-4f02-a41c-6265dc7f1c95,FlutterFlow,https://flutterflow.io,GV
+d6908596-228b-45da-86ee-a45e4de93328,Obsidian Therapeutics,http://obsidiantx.com,GV
+d51ee46f-d86b-4483-9db3-62938d9d6dfc,Zencoder *,http://zencoder.com,GV
+bca2fefb-76c1-4151-92eb-0cfc2ccd82c9,Twyla,http://twyla.com,GV
+adaf1b28-babf-49fd-a2fd-efacd9e3ccbb,Partiful,https://partiful.com,GV
+19b87e08-009c-4746-8a6f-f2a335af2e15,Air Protein,http://airprotein.com,GV
+372ccdb2-eed3-41b0-b78f-a0cd6cb2d22e,Ventus Therapeutics,http://ventustx.com,GV
+941492f3-936f-4b1b-897e-cc05a5f6eed8,Loom *,https://www.loom.com,GV
+67e924f7-7825-4912-80ec-e51652ee52ca,Foundation Medicine *,http://foundationmedicine.com,GV
+2f9d8818-8859-42e3-87cc-7f58aae44d23,Mimic,https://mimic.com,GV
+d7b52b4b-4691-4b9a-99a2-8a66933a22ae,Alector *,https://alector.com,GV
+f7e771ef-f1fc-4256-a0ce-a8952a09b70c,Overture,http://overture.life,GV
+9fe51628-ac2b-4e52-b03a-a439817a418f,Resilience,http://resilience.com,GV
+1042dfd6-5c50-46e0-b70f-33cd1d2a1d38,Orbital Insight *,http://orbitalinsight.com,GV
+53b9db1c-9fd5-419a-ab9e-3bbe0ec13a6d,Urban Engines *,https://en.wikipedia.org/wiki/Urban_Engines,GV
+5d1d91c8-4100-455d-b88f-82a8462ab7f2,Recorded Future *,http://recordedfuture.com,GV
+fcf6f65d-5540-41b6-b2be-c0306e0f4220,Chronosphere *,https://chronosphere.io,GV
+5bca1a81-7b43-428f-9f0c-b1c411652536,23andMe *,http://23andme.com,GV
+663ea225-905a-45f3-b2b5-68fbc8b6bd74,Teem *,http://teem.com,GV
+7be90bee-72c0-43f2-9c9c-30d5661e4b59,Cerevance,http://cerevance.com,GV
+291e1eb9-ad98-459d-874c-f70cad1f4584,Seismic Therapeutic,http://seismictx.com,GV
+208b6506-1656-4eaf-b7a5-7d8bde746cc0,Invetx *,invetx.com,GV
+0c2510bc-ffa4-48e7-b6f5-c24b03783743,Medium,https://www.medium.com,GV
+d94cf830-9f8e-4fd2-940b-04faade4ecfe,Transphorm *,http://transphormusa.com,GV
+06577302-1b43-4680-8533-a6616d46ad1c,Ripple Foods,http://ripplefoods.com,GV
+4ef37c8f-0d76-4d74-a126-7e345eee5e8d,Good Eggs *,https://goodeggs.com,GV
+1e6a26e0-06a9-4004-aa28-689cb2fbcb3f,Kitchen United,http://kitchenunited.com,GV
+5ced9739-3653-4a79-98fe-4d8ba161b88b,Relay Therapeutics *,http://relaytx.com,GV
+19dd353f-d1a1-4e87-b1e4-8e74eaeef342,SpyBiotech,http://spybiotech.com,GV
+8a6158a3-f1d6-4e50-bf47-bfa939e1675c,Flourish,http://www.flourishlabs.ai,GV
+e02d337b-662e-4e7a-a888-5a4670c38ff5,Armadin,https://www.armadin.com,GV
+347ff1ca-82cc-4a97-81f2-a4b13ef53110,Shape Security *,http://shapesecurity.com,GV
+e6a71a65-bfdd-4a10-8abc-5af1b8ab53b7,Ursa Computing,http://ursacomputing.com,GV
+2fe56589-de89-4f07-805b-cddba328e718,Nava Therapeutics,https://navatx.com,GV
+ba357170-9837-4514-ab33-05c3061516ab,Currencycloud *,http://currencycloud.com,GV
+de864afe-9020-47c5-9bdc-e2d38d49bd1b,Laurel,https://www.laurel.ai,GV
+3c2f1f38-962c-43c3-93ca-dcbbc82f4682,Soylent *,http://soylent.com,GV
+b2995406-8ab5-4e52-b48e-0748229808ab,Tenaya Therapeutics *,http://tenayatherapeutics.com,GV
+17c37ae3-7acb-474d-b4bd-b586d7860879,Verve Therapeutics *,http://vervetx.com,GV
+8d247259-9b66-4470-97a6-9d6233ca9303,Driver,https://www.driver.ai,GV
+b05fa5d1-2903-400b-a036-19693a9164cd,Sync Labs,https://sync.so,GV
+7292cc86-c240-45a5-905c-d7e613d1c074,Rodin Therapeutics *,http://rodintherapeutics.com,GV
+34f45ed9-72d1-411d-8119-9372f76742c1,Granular *,http://granular.ag,GV
+9c9fef51-8f6f-46b3-b7e4-d7b997ee0dd1,GoCardless *,http://gocardless.com,GV
+35176b17-379b-41a6-8944-00864bf37b7d,Transcriptic,http://transcriptic.com,GV
+26f98bb6-da36-4938-b7bf-f680b4e0d651,SpeedyBrand,https://speedybrand.io,GV
+47940d6f-95cf-4976-b84c-17faadcbcca3,Zest,https://www.zest.co,GV
+92780270-a7dc-4095-9265-d64f8880ea72,Redpanda,http://redpanda.com,GV
+7daf62e7-0752-42ec-9f21-ce20adf12f86,Allara Health,https://www.allarahealth.com,GV
+3380d4e9-5730-49d5-be6a-fac33a632ef6,Luminate Wireless,http://www.luminate.com,GV
+c5829e48-f910-4a7f-b7be-9d4f76327112,Freenome *,http://freenome.com,GV
+0a766461-0988-4d3f-a96d-4160e0b5153e,CareBridge *,http://carebridgehealth.com,GV
+051c4424-641a-47da-afcc-90396e8a2b7d,Weaveworks,http://weave.works,GV
+46d7fc7b-ae7d-499e-9bf1-1f0091437798,Lacework *,https://www.lacework.com,GV
+e9bb7c62-8b51-482b-9beb-dfd0c83e83b4,DualEntry,https://www.dualentry.com,GV
+25d9a24e-9d3d-43c8-9086-bf6fdc5d5b36,Leyden Labs,https://leydenlabs.com,GV
+b6f4d43f-3a77-4329-9240-0e5233751ac9,Prime Medicine,http://primemedicine.com,GV
+536c1196-def5-4edf-8b9b-12fbac1233b0,Gritstone Bio *,http://gritstoneoncology.com,GV
+3a1165dc-e1d8-46b5-a2a7-ed0137016201,Clever Care,https://clevercarehealthplan.com,GV
+9429861f-ea12-4b54-a2e3-9ad3bfcf82ab,Sold *,http://usesold.com,GV
+39a49df8-7081-4fc2-9567-171b9cad7de4,Snowball *,http://trysnowball.com,GV
+aeb2932d-c1bb-44fb-8786-08fb4cfdf8e4,Treeline Biosciences,http://treelinebiosciences.com,GV
+b75892ca-0ac6-4129-b9a6-02787fbcd3be,Oxford Science Enterprises,http://oxfordscienceenterprises.com,GV
+61cc7396-cd3c-458c-9948-45d050cc3131,Periscope Data *,http://periscope.tv,GV
+52fc5b23-99a7-482c-ba4d-7fc921942f7f,Nym Health,http://nym.health,GV
+4c9191d8-6f77-4581-af48-b8a2fdff2354,Paradigm Health,https://www.paradigm.inc/,GV
+f32f1790-6aab-4745-853a-c72a61656060,Complyance,https://www.complyance.com,GV
+255c8fb6-40c1-4a7b-aaed-a3155dd5e63e,Recursive Superintelligence,https://www.recursive.com,GV

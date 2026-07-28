@@ -201,6 +201,17 @@ async function computeTextFits(
     return fits;
   }
 
+  // TODO(firm-level fallback): contacts at firms with no published per-deal
+  // attribution (a16z, and likely most future scrapes -- see
+  // investor_scraper/scraper.py's a16z section) have an empty
+  // contact.investments here even though their firm has a large portfolio.
+  // dataPuller.ts already pulls the firm's full portfolio_investments (to
+  // backfill investment_stage/year_partnered), so the raw data exists --
+  // it's just not exposed as a fallback pool here. Mirror the pattern already
+  // used for stage/check-size (ContactFeatureEncoder falls back to the org's
+  // vertical_focus when a contact has no personal data): when
+  // contact.investments is empty, score against the org's aggregate
+  // portfolio instead of leaving these contacts at NEUTRAL_SCORE for text fit.
   for (const contact of contacts) {
     const portfolio = contact.investments
       .filter((inv) => inv.company_id && companyEmbeddings.has(inv.company_id))
